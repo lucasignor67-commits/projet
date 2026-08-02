@@ -182,6 +182,11 @@ CREATE TABLE presence (
   depuis           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Temps réel : diffuse les changements de présence à tous les clients abonnés.
+-- (données non sensibles : matricule + poste)
+ALTER PUBLICATION supabase_realtime ADD TABLE presence;
+GRANT SELECT ON presence TO anon;
+
 -- ── 5. JOURNAL ──────────────────────────────────────────────────
 CREATE TABLE journal_comptes (
   id               SERIAL PRIMARY KEY,

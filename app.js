@@ -28,16 +28,55 @@ const badge = (value) => `<span class="badge badge-${BADGE_TONES[value] || 'gray
 const tone = (value) => BADGE_TONES[value] || 'gray';
 const initials = (nom) => nom.replace(/[«»"]/g, '').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
-// ── Présence sur la carte (stockée localement dans le navigateur) ──
-// posts = { matricule: 'nom du point' } — un matricule ne peut avoir qu'un poste.
-const POSTS_KEY = 'milicia.posts';
-const ME_KEY = 'milicia.me';
-const loadPosts = () => { try { return JSON.parse(localStorage.getItem(POSTS_KEY)) || {}; } catch (e) { return {}; } };
-const savePosts = (p) => { try { localStorage.setItem(POSTS_KEY, JSON.stringify(p)); } catch (e) {} };
-const loadMe = () => { try { return localStorage.getItem(ME_KEY) || ''; } catch (e) { return ''; } };
-const saveMe = (m) => { try { localStorage.setItem(ME_KEY, m); } catch (e) {} };
+// ── Présence sur la carte ──
+// PRESENCE = { matricule: 'nom du poste } — partagé via Supabase (temps réel).
+// En mode démo (sans serveur), sauvegardé dans le navigateur.
+let PRESENCE = {};
+const DEMO_POSTS_KEY = 'milicia.posts';
 const memberName = (mat) => { const e = PAGES.effectifs.data.find((x) => x.matricule === mat); return e ? e.nom : mat; };
-const occupantsAt = (nom) => { const p = loadPosts(); return Object.keys(p).filter((mat) => p[mat] === nom); };
+const occupantsAt = (nom) => Object.keys(PRESENCE).filter((mat) => PRESENCE[mat] === nom);
+
+// Recharge la présence (serveur ou démo) puis rafraîchit la carte si affichée
+async function loadPresence() {
+  if (ME && ME.demo) {
+    try { PRESENCE = JSON.parse(localStorage.getItem(DEMO_POSTS_KEY)) || {}; } catch (e) { PRESENCE = {}; }
+  } else if (ME) {
+    try {
+      const r = await api('presence');
+      PRESENCE = {};
+      (r.presence || []).forEach((p) => { if (p.mat && p.poste) PRESENCE[p.mat] = p.poste; });
+    } catch (e) { /* conserve l'état précédent */ }
+  }
+  if (currentPage === 'carte') rerenderCarte();
+}
+
+// Prend / quitte un poste (un seul à la fois)
+async function togglePost(nom) {
+  if (!ME) return;
+  const mat = ME.matricule;
+  if (ME.demo) {
+    if (PRESENCE[mat] === nom) delete PRESENCE[mat]; else PRESENCE[mat] = nom;
+    try { localStorage.setItem(DEMO_POSTS_KEY, JSON.stringify(PRESENCE)); } catch (e) {}
+    if (currentPage === 'carte') rerenderCarte();
+    return;
+  }
+  try {
+    if (PRESENCE[mat] === nom) await api('presence_clear');
+    else await api('presence_set', { poste: nom });
+  } catch (e) { alert(e.message); return; }
+  await loadPresence(); // le temps réel rafraîchira aussi les autres
+}
+
+// Re-rendu de la carte (après changement de présence)
+function rerenderCarte() {
+  if (currentPage !== 'carte') return;
+  const cfg = PAGES.carte;
+  const host = document.getElementById('customSection');
+  if (!host) return;
+  host.innerHTML = cfg.render(cfg);
+  cfg.afterRender(cfg);
+  refreshStats('carte');
+}
 
 // ── Configuration des rubriques ──
 const PAGES = {
@@ -354,8 +393,7 @@ const PAGES = {
     view: 'custom',
     icon: '<svg viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg>',
     stats: (zones) => {
-      const posts = loadPosts();
-      const enPoste = Object.values(posts).filter((nom) => zones.some((z) => z.nom === nom)).length;
+      const enPoste = Object.values(PRESENCE).filter((nom) => zones.some((z) => z.nom === nom)).length;
       return [
         ['Zones', zones.length],
         ['Sécurisées', countBy(zones, 'statut', 'SÉCURISÉE')],
@@ -376,10 +414,8 @@ const PAGES = {
       { nom: 'Surveillance TIG', x: 93, y: 10, statut: 'SÉCURISÉE' },
     ],
     render: function (cfg) {
-      const me = loadMe();
-      const posts = loadPosts();
-      const myPost = posts[me] || '';
-      const members = PAGES.effectifs.data;
+      const me = ME ? ME.matricule : '';
+      const myPost = (me && PRESENCE[me]) || '';
 
       return `
       <div class="panel-head">
@@ -394,18 +430,11 @@ const PAGES = {
       </div>
 
       <div class="post-bar">
-        <label class="post-me">Vous êtes
-          <select id="opSelect">
-            <option value="">— Sélectionner votre matricule —</option>
-            ${members.map((m) => `<option value="${m.matricule}"${m.matricule === me ? ' selected' : ''}>${m.matricule} | ${m.nom}</option>`).join('')}
-          </select>
-        </label>
+        <div class="post-me">Vous : <b>${me ? `${me} | ${ME.nom}` : '—'}</b></div>
         <div class="post-current">
-          ${me
-            ? (myPost
-                ? `En poste : <b>${myPost}</b> <button class="btn btn-ghost btn-sm" id="leavePost">QUITTER</button>`
-                : `<span class="post-hint">Cliquez un point sur la carte pour prendre votre poste.</span>`)
-            : `<span class="post-hint">Sélectionnez votre matricule, puis cliquez un point.</span>`}
+          ${myPost
+            ? `En poste : <b>${myPost}</b> <button class="btn btn-ghost btn-sm" id="leavePost">QUITTER</button>`
+            : `<span class="post-hint">Cliquez un point sur la carte pour prendre votre poste.</span>`}
         </div>
       </div>
 
@@ -470,7 +499,7 @@ const PAGES = {
           <span class="panel-kicker">Présence</span>
           <h2 class="panel-title">QUI EST OÙ</h2>
         </div>
-        <span class="panel-count">${Object.values(posts).filter((n) => cfg.data.some((z) => z.nom === n)).length} EN POSTE</span>
+        <span class="panel-count">${Object.values(PRESENCE).filter((n) => cfg.data.some((z) => z.nom === n)).length} EN POSTE</span>
       </div>
       <div class="presence">
         ${cfg.data.map((z) => {
@@ -522,16 +551,9 @@ const PAGES = {
 
       editBtn.addEventListener('click', () => { cfg._editing = !cfg._editing; applyEditing(); });
 
-      // ── Prise de poste (présence) ──
-      const opSelect = host.querySelector('#opSelect');
-      opSelect?.addEventListener('change', () => { saveMe(opSelect.value); rerender(); });
-
+      // ── Prise de poste (présence, partagée) ──
       host.querySelector('#leavePost')?.addEventListener('click', () => {
-        const me = loadMe();
-        const posts = loadPosts();
-        delete posts[me];
-        savePosts(posts);
-        rerender();
+        if (ME && PRESENCE[ME.matricule]) togglePost(PRESENCE[ME.matricule]);
       });
 
       // Clic sur un marqueur = ouvre / ferme le panneau du poste (hors mode édition)
@@ -548,13 +570,7 @@ const PAGES = {
       // Panneau de poste : prendre / quitter / fermer
       host.querySelector('#popupClose')?.addEventListener('click', () => { cfg._openPoint = null; rerender(); });
       host.querySelector('#popupToggle')?.addEventListener('click', () => {
-        const meNow = loadMe();
-        const posts = loadPosts();
-        const nom = cfg._openPoint;
-        if (posts[meNow] === nom) delete posts[meNow];   // déjà sur ce poste → quitter
-        else posts[meNow] = nom;                          // prendre le poste (retire l'ancien)
-        savePosts(posts);
-        rerender();
+        if (cfg._openPoint) togglePost(cfg._openPoint);
       });
 
       // ── Éditeur de points (nom + statut + suppression) ──
@@ -1000,6 +1016,7 @@ function navigate(page) {
       customSection.hidden = false;
       customSection.innerHTML = cfg.render(cfg);
       if (cfg.afterRender) cfg.afterRender(cfg);
+      if (page === 'carte') loadPresence(); // rafraîchit la présence depuis le serveur
     } else {
       customSection.hidden = true;
       tableSection.hidden = false;
@@ -1209,6 +1226,27 @@ async function afterLogin() {
   buildHomeGrid();
   updateHomeStats();
   navigate('accueil');
+
+  // Présence + temps réel
+  await loadPresence();
+  setupRealtime();
+}
+
+// Abonnement Supabase Realtime : rafraîchit la présence dès qu'un poste change
+let RT_CHANNEL = null;
+async function setupRealtime() {
+  if (!ME || ME.demo || RT_CHANNEL || !window.supabase) return;
+  try {
+    const cfg = await api('realtime_config');
+    if (!cfg.url || !cfg.anonKey) return;
+    const sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: false } });
+    RT_CHANNEL = sb
+      .channel('presence-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presence' }, () => loadPresence())
+      .subscribe();
+  } catch (e) {
+    console.warn('Realtime indisponible :', e.message);
+  }
 }
 
 // ── Page Gestion des comptes ──
