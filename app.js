@@ -9,6 +9,7 @@ const countBy = (rows, key, value) => rows.filter((r) => r[key] === value).lengt
 // Tonalité des badges par valeur
 const BADGE_TONES = {
   'EN SERVICE': 'green', 'REPOS': 'gray', 'ABSENT': 'amber',
+  'TITULAIRE': 'green', 'EN TEST': 'amber',
   'VALIDÉ': 'green', 'EN COURS': 'amber', 'CLASSÉ': 'gray', 'EN ATTENTE': 'amber',
   'VALIDÉE': 'green', 'REFUSÉE': 'red',
   'PLANIFIÉE': 'gray', 'TERMINÉE': 'gray', 'ANNULÉE': 'red', 'ACTIVE': 'green',
@@ -27,6 +28,17 @@ const badge = (value) => `<span class="badge badge-${BADGE_TONES[value] || 'gray
 const tone = (value) => BADGE_TONES[value] || 'gray';
 const initials = (nom) => nom.replace(/[«»"]/g, '').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
+// ── Présence sur la carte (stockée localement dans le navigateur) ──
+// posts = { matricule: 'nom du point' } — un matricule ne peut avoir qu'un poste.
+const POSTS_KEY = 'milicia.posts';
+const ME_KEY = 'milicia.me';
+const loadPosts = () => { try { return JSON.parse(localStorage.getItem(POSTS_KEY)) || {}; } catch (e) { return {}; } };
+const savePosts = (p) => { try { localStorage.setItem(POSTS_KEY, JSON.stringify(p)); } catch (e) {} };
+const loadMe = () => { try { return localStorage.getItem(ME_KEY) || ''; } catch (e) { return ''; } };
+const saveMe = (m) => { try { localStorage.setItem(ME_KEY, m); } catch (e) {} };
+const memberName = (mat) => { const e = PAGES.effectifs.data.find((x) => x.matricule === mat); return e ? e.nom : mat; };
+const occupantsAt = (nom) => { const p = loadPosts(); return Object.keys(p).filter((mat) => p[mat] === nom); };
+
 // ── Configuration des rubriques ──
 const PAGES = {
 
@@ -34,30 +46,88 @@ const PAGES = {
 
   effectifs: {
     title: 'EFFECTIFS',
-    desc: 'Liste du personnel de la milice, grades et affectations.',
+    desc: 'Liste du personnel de la milice, matricules et grades.',
     kicker: 'Personnel',
     listTitle: 'REGISTRE DU PERSONNEL',
     addLabel: 'NOUVEAU MEMBRE',
     columns: [
-      { key: 'matricule', label: 'Matricule' },
+      { key: 'matricule', label: 'N°' },
       { key: 'nom', label: 'Nom' },
       { key: 'grade', label: 'Grade' },
-      { key: 'telephone', label: 'Téléphone' },
       { key: 'statut', label: 'Statut', badge: true, align: 'right' },
     ],
     stats: (rows) => [
-      ['Total', rows.length],
-      ['En service', countBy(rows, 'statut', 'EN SERVICE')],
-      ['Repos', countBy(rows, 'statut', 'REPOS')],
-      ['Absents', countBy(rows, 'statut', 'ABSENT')],
+      ['Effectif', rows.length],
+      ['Gradés', rows.filter((r) => r.grade !== 'Recluta').length],
+      ['Recrues', countBy(rows, 'grade', 'Recluta')],
+      ['En test', countBy(rows, 'statut', 'EN TEST')],
     ],
     data: [
-      { matricule: 'M-01', nom: 'Ramón « El Comandante » Herrera', grade: 'Comandante', telephone: '555-0140', statut: 'EN SERVICE' },
-      { matricule: 'M-02', nom: 'Mateo Vargas', grade: 'Teniente', telephone: '555-0177', statut: 'EN SERVICE' },
-      { matricule: 'M-03', nom: 'Lucía Fuentes', grade: 'Sargento', telephone: '555-0192', statut: 'REPOS' },
-      { matricule: 'M-04', nom: 'Diego Salazar', grade: 'Soldado', telephone: '555-0163', statut: 'EN SERVICE' },
-      { matricule: 'M-05', nom: 'Carmen Reyes', grade: 'Soldado', telephone: '555-0128', statut: 'ABSENT' },
-      { matricule: 'M-06', nom: 'Álvaro Mendoza', grade: 'Recluta', telephone: '555-0151', statut: 'REPOS' },
+      { matricule: '04', nom: 'Frost Alex', grade: 'Capitán Segundo', statut: 'EN TEST' },
+      { matricule: '06', nom: 'Emax Jackson', grade: 'Capitán Primero', statut: 'TITULAIRE' },
+      { matricule: '07', nom: 'Freya Myers', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '08', nom: 'Jean Rashford Muani', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '09', nom: 'Julian Salvatore', grade: 'Alfarez Segundo', statut: 'TITULAIRE' },
+      { matricule: '10', nom: 'Loann Charvot', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '11', nom: 'Max Emerson', grade: 'Capitán Primero', statut: 'EN TEST' },
+      { matricule: '12', nom: 'Perdo Faritasse', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '13', nom: 'Solís Grenadine', grade: 'Alfarez Primero', statut: 'TITULAIRE' },
+      { matricule: '14', nom: 'Carlo Avarro', grade: 'Teniente', statut: 'TITULAIRE' },
+      { matricule: '15', nom: 'Looping Lee', grade: 'Coronel', statut: 'TITULAIRE' },
+      { matricule: '16', nom: 'Esmée Bueno', grade: 'Coronel', statut: 'TITULAIRE' },
+      { matricule: '17', nom: 'Elie Abel', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '19', nom: 'Brian Peterson', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '20', nom: 'Reno Leven Toro', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '22', nom: 'Alvaro Cortes', grade: 'Soldado', statut: 'TITULAIRE' },
+      { matricule: '24', nom: 'Joachim Ben Messaoud', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '25', nom: 'Jan Nowak', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '26', nom: 'Malik Abik', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '27', nom: 'Perdo Sisa', grade: 'Soldado', statut: 'TITULAIRE' },
+      { matricule: '28', nom: 'Ben Rich The-Bee Bueno', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '29', nom: 'Aylan Thoands', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '30', nom: 'Damon Peterson', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '31', nom: 'Wolf Smith Nolan', grade: 'Teniente', statut: 'TITULAIRE' },
+      { matricule: '33', nom: 'Gwenn Loera', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '34', nom: 'Hargrove Eloann', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '35', nom: 'Delacruz Carlos', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '36', nom: 'Diego Alvarez', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '37', nom: 'Jhonn Sléman', grade: 'Soldado', statut: 'TITULAIRE' },
+      { matricule: '38', nom: 'Béné Ghanzalez', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '42', nom: 'Hamilton Andy', grade: 'Soldado', statut: 'TITULAIRE' },
+      { matricule: '43', nom: 'Laponne Mattéo', grade: 'Coronel', statut: 'TITULAIRE' },
+      { matricule: '44', nom: 'Sergio Artys', grade: 'Capitán Segundo', statut: 'TITULAIRE' },
+      { matricule: '45', nom: 'Rayan Fox', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '46', nom: 'Tom Kirkmant', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '47', nom: 'Tazer Jacob', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '48', nom: 'Callisto Reyes', grade: 'Teniente Coronel', statut: 'EN TEST' },
+      { matricule: '49', nom: 'Cédric Moreno', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '51', nom: 'Diego Ramirez', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '52', nom: 'Couper Boss', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '53', nom: 'Rico Ad', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '55', nom: 'Pablito Escanor', grade: 'Soldado', statut: 'TITULAIRE' },
+      { matricule: '56', nom: 'Myers Rima', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '58', nom: 'Mora Jordan', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '59', nom: 'Gianni Lampuza', grade: 'Alfarez Segundo', statut: 'TITULAIRE' },
+      { matricule: '62', nom: 'Valesco Lee Riley', grade: 'Teniente', statut: 'TITULAIRE' },
+      { matricule: '64', nom: 'Lopesse Karl', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '65', nom: 'Juan El Sueno', grade: 'Teniente', statut: 'EN TEST' },
+      { matricule: '66', nom: 'Hakim Mahgoumgo', grade: 'Soldado Primera', statut: 'TITULAIRE' },
+      { matricule: '67', nom: 'James Bobby', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '68', nom: 'Rivera Emilio', grade: 'Alfarez Primero', statut: 'EN TEST' },
+      { matricule: '69', nom: 'Clément Landy', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '71', nom: 'Mathis Luke', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '73', nom: 'Ricardo Peirrera', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '74', nom: 'Lucas Martin', grade: 'Sargento', statut: 'TITULAIRE' },
+      { matricule: '77', nom: 'Livio Santos', grade: 'Sargento', statut: 'TITULAIRE' },
+      { matricule: '78', nom: 'Djess Less', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '80', nom: 'Eren Kohlman', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '82', nom: 'Bernardo Wedson', grade: 'Cabo', statut: 'EN TEST' },
+      { matricule: '83', nom: 'Clode Myers', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '85', nom: 'Alsan Guesumov', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '87', nom: 'Dovis Diego', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '88', nom: 'Fox Nina', grade: 'Alfarez Primero', statut: 'TITULAIRE' },
+      { matricule: '89', nom: 'Jason Larkay', grade: 'Recluta', statut: 'TITULAIRE' },
+      { matricule: '90', nom: 'Joe Billy', grade: 'Recluta', statut: 'TITULAIRE' },
     ],
   },
 
@@ -283,50 +353,291 @@ const PAGES = {
     desc: "Carte tactique de l'île — zones contrôlées et points d'intérêt.",
     view: 'custom',
     icon: '<svg viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg>',
-    stats: (zones) => [
-      ['Zones', zones.length],
-      ['Sécurisées', countBy(zones, 'statut', 'SÉCURISÉE')],
-      ['Surveillance', countBy(zones, 'statut', 'SURVEILLANCE')],
-      ['Alerte', countBy(zones, 'statut', 'ALERTE')],
-    ],
+    stats: (zones) => {
+      const posts = loadPosts();
+      const enPoste = Object.values(posts).filter((nom) => zones.some((z) => z.nom === nom)).length;
+      return [
+        ['Zones', zones.length],
+        ['Sécurisées', countBy(zones, 'statut', 'SÉCURISÉE')],
+        ['Alerte', countBy(zones, 'statut', 'ALERTE')],
+        ['En poste', enPoste],
+      ];
+    },
     data: [
-      { nom: 'Aérodrome', x: 22, y: 24, statut: 'SÉCURISÉE' },
-      { nom: 'Plage nord', x: 46, y: 28, statut: 'SURVEILLANCE' },
-      { nom: 'Quai nord', x: 63, y: 26, statut: 'SÉCURISÉE' },
-      { nom: 'Lagon / entrepôts', x: 57, y: 46, statut: 'SÉCURISÉE' },
-      { nom: 'Plantations', x: 73, y: 51, statut: 'ALERTE' },
-      { nom: 'Poste de guet est', x: 84, y: 60, statut: 'SÉCURISÉE' },
-      { nom: 'Camp principal', x: 60, y: 74, statut: 'SÉCURISÉE' },
+      { nom: 'Aérodrome', x: 37, y: 21, statut: 'SÉCURISÉE' },
+      { nom: 'Frontière', x: 69, y: 43, statut: 'SURVEILLANCE' },
+      { nom: 'Port armée', x: 59, y: 52, statut: 'SÉCURISÉE' },
+      { nom: 'entré zone rouge', x: 61, y: 72, statut: 'ALERTE' },
+      { nom: 'Champ de feuille', x: 78, y: 60, statut: 'SÉCURISÉE' },
+      { nom: 'Patrouille Terrestre', x: 8, y: 40, statut: 'SÉCURISÉE' },
+      { nom: 'Patrouille Maritime', x: 8, y: 51, statut: 'SÉCURISÉE' },
+      { nom: 'Patrouille Aérienne', x: 8, y: 45, statut: 'SÉCURISÉE' },
+      { nom: 'En formation', x: 93, y: 5, statut: 'SURVEILLANCE' },
+      { nom: 'Surveillance TIG', x: 93, y: 10, statut: 'SÉCURISÉE' },
     ],
-    render: (cfg) => `
+    render: function (cfg) {
+      const me = loadMe();
+      const posts = loadPosts();
+      const myPost = posts[me] || '';
+      const members = PAGES.effectifs.data;
+
+      return `
       <div class="panel-head">
         <div>
           <span class="panel-kicker">Vue tactique</span>
           <h2 class="panel-title">CARTE DE L'ÎLE</h2>
         </div>
-        <span class="panel-count">${cfg.data.length} ZONES</span>
+        <div class="map-tools">
+          <span class="panel-count">${cfg.data.length} ZONES</span>
+          <button class="btn btn-ghost btn-sm" id="mapEdit">ÉDITER</button>
+        </div>
       </div>
+
+      <div class="post-bar">
+        <label class="post-me">Vous êtes
+          <select id="opSelect">
+            <option value="">— Sélectionner votre matricule —</option>
+            ${members.map((m) => `<option value="${m.matricule}"${m.matricule === me ? ' selected' : ''}>${m.matricule} | ${m.nom}</option>`).join('')}
+          </select>
+        </label>
+        <div class="post-current">
+          ${me
+            ? (myPost
+                ? `En poste : <b>${myPost}</b> <button class="btn btn-ghost btn-sm" id="leavePost">QUITTER</button>`
+                : `<span class="post-hint">Cliquez un point sur la carte pour prendre votre poste.</span>`)
+            : `<span class="post-hint">Sélectionnez votre matricule, puis cliquez un point.</span>`}
+        </div>
+      </div>
+
       <div class="map-wrap">
         <img class="map-img" src="map.jpg" alt="Carte de Cayo Perico"
              onerror="this.closest('.map-wrap').classList.add('map-missing')">
-        ${cfg.data.map((z) => `
-          <div class="map-marker tone-${tone(z.statut)}" style="left:${z.x}%; top:${z.y}%">
-            <span class="marker-dot"></span>
+        ${cfg.data.map((z, i) => {
+          const occ = occupantsAt(z.nom);
+          const mine = me && myPost === z.nom;
+          return `
+          <div class="map-marker tone-${tone(z.statut)}${occ.length ? ' occupied' : ''}${mine ? ' mine' : ''}" data-idx="${i}" style="left:${z.x}%; top:${z.y}%">
+            <span class="marker-dot">${occ.length ? occ.length : ''}</span>
             <span class="marker-label">${z.nom}</span>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
+        ${(() => {
+          const zone = cfg._openPoint ? cfg.data.find((z) => z.nom === cfg._openPoint) : null;
+          if (!zone) return '';
+          const occ = occupantsAt(zone.nom);
+          const tx = zone.x > 55 ? 'calc(-100% - 14px)' : '14px';
+          const ty = zone.y > 58 ? 'calc(-100% - 14px)' : '14px';
+          return `
+          <div class="post-popup" style="left:${zone.x}%; top:${zone.y}%; transform: translate(${tx}, ${ty});">
+            <div class="popup-head">
+              <span class="marker-dot tone-${tone(zone.statut)}"></span>
+              <span class="popup-title">${zone.nom}</span>
+              ${badge(zone.statut)}
+              <button class="popup-close" id="popupClose" title="Fermer">✕</button>
+            </div>
+            <div class="popup-action">
+              ${me
+                ? (myPost === zone.nom
+                    ? `<button class="btn btn-ghost btn-sm" id="popupToggle">QUITTER LE POSTE</button>`
+                    : `<button class="btn btn-primary btn-sm" id="popupToggle">PRENDRE LE POSTE</button>`)
+                : `<span class="post-hint">Sélectionnez votre matricule dans « Vous êtes » pour prendre ce poste.</span>`}
+            </div>
+            <div class="popup-sub">À ce poste</div>
+            <div class="popup-people">
+              ${occ.length
+                ? occ.map((mat) => `<span class="op-chip${mat === me ? ' me' : ''}"><b>${mat}</b> ${memberName(mat)}</span>`).join('')
+                : '<span class="presence-empty">Personne à ce poste</span>'}
+            </div>
+          </div>`;
+        })()}
         <div class="map-placeholder">
           <div class="empty-title">CARTE INDISPONIBLE</div>
-          <div class="empty-sub">Déposez l'image de l'île dans <b>assets/carte.jpg</b> pour l'afficher ici.</div>
+          <div class="empty-sub">Déposez l'image de l'île dans <b>map.jpg</b> pour l'afficher ici.</div>
         </div>
       </div>
-      <div class="map-legend">
-        ${cfg.data.map((z) => `
-          <div class="legend-item">
+
+      <div class="map-edit-bar" id="mapEditBar" hidden>
+        <div class="map-readout" id="mapReadout">Glissez un point sur la carte pour le déplacer, ou modifiez son nom / statut ci-dessous.</div>
+        <div class="pt-editor" id="ptEditor"></div>
+        <div class="map-edit-actions">
+          <button class="btn btn-ghost btn-sm" id="mapAdd">+ AJOUTER UN POINT</button>
+          <button class="btn btn-primary btn-sm" id="mapCopy">COPIER LES COORDONNÉES</button>
+        </div>
+      </div>
+
+      <div class="panel-head" style="margin-top:20px">
+        <div>
+          <span class="panel-kicker">Présence</span>
+          <h2 class="panel-title">QUI EST OÙ</h2>
+        </div>
+        <span class="panel-count">${Object.values(posts).filter((n) => cfg.data.some((z) => z.nom === n)).length} EN POSTE</span>
+      </div>
+      <div class="presence">
+        ${cfg.data.map((z) => {
+          const occ = occupantsAt(z.nom);
+          return `
+          <div class="presence-row">
             <span class="marker-dot tone-${tone(z.statut)}"></span>
-            <span class="legend-name">${z.nom}</span>
-            ${badge(z.statut)}
-          </div>`).join('')}
-      </div>`,
+            <span class="presence-name">${z.nom}</span>
+            <span class="presence-people">
+              ${occ.length
+                ? occ.map((mat) => `<span class="op-chip${mat === me ? ' me' : ''}"><b>${mat}</b> ${memberName(mat)}</span>`).join('')
+                : '<span class="presence-empty">personne</span>'}
+            </span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    },
+
+    afterRender: function (cfg) {
+      const host = document.getElementById('customSection');
+      const wrap = host.querySelector('.map-wrap');
+      const img = wrap.querySelector('.map-img');
+      const editBtn = host.querySelector('#mapEdit');
+      const editBar = host.querySelector('#mapEditBar');
+      const readout = host.querySelector('#mapReadout');
+      const copyBtn = host.querySelector('#mapCopy');
+      const addBtn = host.querySelector('#mapAdd');
+      const ptEditor = host.querySelector('#ptEditor');
+      const STATUTS = ['SÉCURISÉE', 'SURVEILLANCE', 'ALERTE'];
+      let drag = null;
+
+      // Reconstruit toute la vue (après ajout / suppression / changement de statut)
+      const rerender = () => {
+        host.innerHTML = cfg.render(cfg);
+        cfg.afterRender(cfg);
+        document.getElementById('pageStats').innerHTML = cfg
+          .stats(cfg.data)
+          .map(([l, v]) => `<div class="stat-box"><span class="stat-label">${l}</span><span class="stat-value">${v}</span></div>`)
+          .join('');
+      };
+
+      // Restaure l'état d'édition après un rerender
+      const applyEditing = () => {
+        wrap.classList.toggle('editing', !!cfg._editing);
+        editBtn.textContent = cfg._editing ? 'TERMINER' : 'ÉDITER';
+        editBar.hidden = !cfg._editing;
+      };
+      applyEditing();
+
+      editBtn.addEventListener('click', () => { cfg._editing = !cfg._editing; applyEditing(); });
+
+      // ── Prise de poste (présence) ──
+      const opSelect = host.querySelector('#opSelect');
+      opSelect?.addEventListener('change', () => { saveMe(opSelect.value); rerender(); });
+
+      host.querySelector('#leavePost')?.addEventListener('click', () => {
+        const me = loadMe();
+        const posts = loadPosts();
+        delete posts[me];
+        savePosts(posts);
+        rerender();
+      });
+
+      // Clic sur un marqueur = ouvre / ferme le panneau du poste (hors mode édition)
+      wrap.querySelectorAll('.map-marker').forEach((m) => {
+        m.addEventListener('click', (e) => {
+          if (cfg._editing) return;
+          e.stopPropagation();
+          const nom = cfg.data[+m.dataset.idx].nom;
+          cfg._openPoint = cfg._openPoint === nom ? null : nom;
+          rerender();
+        });
+      });
+
+      // Panneau de poste : prendre / quitter / fermer
+      host.querySelector('#popupClose')?.addEventListener('click', () => { cfg._openPoint = null; rerender(); });
+      host.querySelector('#popupToggle')?.addEventListener('click', () => {
+        const meNow = loadMe();
+        const posts = loadPosts();
+        const nom = cfg._openPoint;
+        if (posts[meNow] === nom) delete posts[meNow];   // déjà sur ce poste → quitter
+        else posts[meNow] = nom;                          // prendre le poste (retire l'ancien)
+        savePosts(posts);
+        rerender();
+      });
+
+      // ── Éditeur de points (nom + statut + suppression) ──
+      ptEditor.innerHTML = cfg.data
+        .map((z, i) => `
+          <div class="pt-row" data-idx="${i}">
+            <span class="pt-dot tone-${tone(z.statut)}"></span>
+            <input class="pt-name" type="text" value="${z.nom.replace(/"/g, '&quot;')}" placeholder="Nom du point">
+            <select class="pt-status">${STATUTS.map((s) => `<option${s === z.statut ? ' selected' : ''}>${s}</option>`).join('')}</select>
+            <button class="pt-del" title="Supprimer ce point">✕</button>
+          </div>`)
+        .join('');
+
+      ptEditor.querySelectorAll('.pt-row').forEach((row) => {
+        const i = +row.dataset.idx;
+        const nameInput = row.querySelector('.pt-name');
+        // Renommage en direct (sans reconstruire, pour ne pas perdre le focus)
+        nameInput.addEventListener('input', () => {
+          cfg.data[i].nom = nameInput.value;
+          const lbl = wrap.querySelector(`.map-marker[data-idx="${i}"] .marker-label`);
+          if (lbl) lbl.textContent = nameInput.value;
+          const leg = host.querySelectorAll('.legend-name')[i];
+          if (leg) leg.textContent = nameInput.value;
+        });
+        row.querySelector('.pt-status').addEventListener('change', (e) => {
+          cfg.data[i].statut = e.target.value;
+          rerender();
+        });
+        row.querySelector('.pt-del').addEventListener('click', () => {
+          cfg.data.splice(i, 1);
+          rerender();
+        });
+      });
+
+      addBtn?.addEventListener('click', () => {
+        cfg.data.push({ nom: 'Nouvelle zone', x: 50, y: 50, statut: 'SÉCURISÉE' });
+        rerender();
+      });
+
+      // ── Glisser-déposer des marqueurs ──
+      const toPct = (e) => {
+        const r = img.getBoundingClientRect();
+        return {
+          x: Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)),
+          y: Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100)),
+        };
+      };
+
+      wrap.querySelectorAll('.map-marker').forEach((m) => {
+        m.addEventListener('pointerdown', (e) => {
+          if (!cfg._editing) return;
+          e.preventDefault();
+          drag = m;
+          m.classList.add('dragging');
+          m.setPointerCapture(e.pointerId);
+        });
+        m.addEventListener('pointermove', (e) => {
+          if (drag !== m) return;
+          const p = toPct(e);
+          const i = +m.dataset.idx;
+          m.style.left = p.x + '%';
+          m.style.top = p.y + '%';
+          cfg.data[i].x = Math.round(p.x);
+          cfg.data[i].y = Math.round(p.y);
+          readout.textContent = `${cfg.data[i].nom} → x: ${cfg.data[i].x}  y: ${cfg.data[i].y}`;
+        });
+        const end = (e) => {
+          if (drag === m) { m.classList.remove('dragging'); m.releasePointerCapture(e.pointerId); drag = null; }
+        };
+        m.addEventListener('pointerup', end);
+        m.addEventListener('pointercancel', end);
+      });
+
+      copyBtn.addEventListener('click', () => {
+        const txt = cfg.data
+          .map((z) => `      { nom: '${z.nom.replace(/'/g, "\\'")}', x: ${z.x}, y: ${z.y}, statut: '${z.statut}' },`)
+          .join('\n');
+        navigator.clipboard?.writeText(txt).then(
+          () => { copyBtn.textContent = 'COPIÉ ✓'; setTimeout(() => (copyBtn.textContent = 'COPIER LES COORDONNÉES'), 1500); },
+          () => { readout.textContent = txt; }
+        );
+      });
+    },
   },
 
   hierarchie: {
@@ -348,28 +659,28 @@ const PAGES = {
         nom: '🎖️ Gobierno de Cayo Perico',
         roles: [
           { poste: 'Presidente', titulaire: 'Sr. Quica' },
-          { poste: 'Vicepresidente', titulaire: 'Sr. Noche Hiedler' },
+          { poste: 'Vicepresidente', titulaire: '' },
           { poste: 'Jefe del Gobierno', titulaire: '' },
           { poste: 'Secretario General', titulaire: 'Sr. Sam Boudj' },
-          { poste: 'Ministro de la Defensa', titulaire: '01 | Eren Ernesto Bueno' },
+          { poste: 'Ministro de la Defensa', titulaire: '' },
         ],
       },
       {
         nom: '⭐ Dirección de la Milicia',
         roles: [
-          { poste: 'General de la Milicia', titulaire: '01 | Eren Ernesto Bueno' },
-          { poste: 'SubGeneral de la Milicia', titulaire: '02 | Alvarez Zed' },
+          { poste: 'General de la Milicia', titulaire: '' },
+          { poste: 'SubGeneral de la Milicia', titulaire: '' },
           { poste: 'Responsable Maritime', titulaire: '16 | Esmée Bueno' },
-          { poste: 'Adjunto Maritime', titulaire: '34 | Zayne Alvarez' },
-          { poste: 'Responsable Ejército', titulaire: '23 | Roméro Hiedler' },
-          { poste: 'Adjunto Ejército', titulaire: '15 | Looping Lee' },
+          { poste: 'Adjunto Maritime', titulaire: '44 | Sergio Artys / EMS Diego.A' },
+          { poste: 'Responsable Ejército', titulaire: '15 | Looping Lee' },
+          { poste: 'Adjunto Ejército', titulaire: '62 | Riley Lee Valesco' },
           { poste: 'Responsable Fuerza', titulaire: '43 | Laponne Mattéo' },
-          { poste: 'Adjunto Fuerza', titulaire: '' },
+          { poste: 'Adjunto Fuerza', titulaire: '31 | Nolan Wolf Smith' },
           { poste: 'Coronel', titulaire: '' },
           { poste: 'Teniente Coronel', titulaire: '' },
         ],
       },
-      { nom: 'Commando', grades: ['Comandante', 'Capitán Primero', 'Capitán Segundo', 'Teniente'] },
+      { nom: 'Comando', grades: ['Comandante', 'Capitán Primero', 'Capitán Segundo', 'Teniente'] },
       { nom: 'Liderazgo', grades: ['Alfarez Primero', 'Alfarez Segundo', 'Sargento Primero', 'Sargento de la Milicia'] },
       { nom: 'Aplicación', grades: ['Cabo', 'Soldado Primera', 'Soldado', 'Recluta'] },
     ],
@@ -394,45 +705,128 @@ const PAGES = {
         </div>`).join('')}`,
   },
 
-  coffre: {
-    title: 'COFFRE',
-    desc: 'Inventaire et mouvements du coffre de la milice.',
+  formation: {
+    title: 'FORMATION',
+    desc: 'Matrice des certifications — quel matricule possède quelle formation.',
     view: 'custom',
-    stats: (rows) => [
-      ['Articles', rows.length],
-      ['Armes', countBy(rows, 'categorie', 'Arme')],
-      ['Équipement', countBy(rows, 'categorie', 'Équipement')],
-      ['Fonds', '$148,500'],
+
+    // Liste des formations, regroupées par famille (air / véhicule / maritime)
+    formations: [
+      { nom: 'MAS', cat: 'air' },
+      { nom: 'Pilote avancée', cat: 'air' },
+      { nom: 'Pilote', cat: 'air' },
+      { nom: 'Artilleur', cat: 'air' },
+      { nom: 'CQB / DRESS', cat: 'veh' },
+      { nom: 'Camion', cat: 'veh' },
+      { nom: 'Winky', cat: 'veh' },
+      { nom: 'Patrouille', cat: 'veh' },
+      { nom: 'Quad', cat: 'veh' },
+      { nom: 'Moto', cat: 'veh' },
+      { nom: 'DBM', cat: 'mer' },
+      { nom: 'Bateau avancée', cat: 'mer' },
+      { nom: 'Bateau', cat: 'mer' },
+      { nom: 'Plongée', cat: 'mer' },
+      { nom: 'Squaddie', cat: 'mer' },
     ],
-    data: [
-      { article: "Fusil d'assaut", categorie: 'Arme', quantite: 'x6', mouvement: 'Dépôt — 22/07/2026', par: 'Mateo Vargas' },
-      { article: 'Pistolet', categorie: 'Arme', quantite: 'x10', mouvement: 'Retrait — 21/07/2026', par: 'Diego Salazar' },
-      { article: 'Munitions 9mm', categorie: 'Munitions', quantite: 'x480', mouvement: 'Dépôt — 20/07/2026', par: 'Lucía Fuentes' },
-      { article: 'Gilet pare-balles', categorie: 'Équipement', quantite: 'x8', mouvement: 'Dépôt — 18/07/2026', par: 'El Comandante' },
-      { article: 'Radio cryptée', categorie: 'Équipement', quantite: 'x12', mouvement: 'Dépôt — 15/07/2026', par: 'El Comandante' },
-      { article: 'Kit de soin', categorie: 'Équipement', quantite: 'x15', mouvement: 'Dépôt — 14/07/2026', par: 'Carmen Reyes' },
-      { article: 'Jerrican essence', categorie: 'Logistique', quantite: 'x9', mouvement: 'Retrait — 13/07/2026', par: 'Álvaro Mendoza' },
-      { article: 'Argent liquide', categorie: 'Fonds', quantite: '$148,500', mouvement: 'Dépôt — 23/07/2026', par: 'El Comandante' },
-    ],
-    render: (cfg) => `
-      <div class="panel-head">
-        <div>
-          <span class="panel-kicker">Logistique</span>
-          <h2 class="panel-title">INVENTAIRE DU COFFRE</h2>
+
+    // Certifications par matricule (les membres viennent de la page Effectifs).
+    // Pour donner une formation à un matricule, ajoute son nom exact dans son tableau.
+    certifs: {
+      '15': ['MAS', 'Pilote avancée', 'Pilote', 'Artilleur', 'Camion', 'Winky', 'Patrouille', 'Quad', 'Moto'],
+      '16': ['DBM', 'Bateau avancée', 'Bateau', 'Plongée', 'Squaddie', 'Patrouille', 'Winky'],
+      '43': ['CQB / DRESS', 'Camion', 'Winky', 'Patrouille', 'Quad', 'Moto'],
+      '14': ['Winky', 'Patrouille', 'Quad', 'Bateau'],
+      '31': ['Camion', 'Winky', 'Patrouille', 'Quad', 'Moto'],
+      '62': ['Winky', 'Patrouille', 'Quad', 'Bateau', 'Squaddie'],
+      '06': ['Pilote', 'Artilleur', 'Winky', 'Patrouille'],
+      '44': ['Winky', 'Patrouille', 'Quad', 'Camion'],
+    },
+
+    // Liste dérivée de la page Effectifs
+    get data() {
+      return PAGES.effectifs.data.map((m) => ({
+        mat: m.matricule,
+        nom: m.nom,
+        forms: PAGES.formation.certifs[m.matricule] || [],
+      }));
+    },
+
+    stats: function (rows) {
+      const totalCerts = rows.reduce((s, m) => s + m.forms.length, 0);
+      return [
+        ['Membres', rows.length],
+        ['Formations', this.formations.length],
+        ['Certifications', totalCerts],
+        ['Moyenne / membre', (totalCerts / rows.length).toFixed(1)],
+      ];
+    },
+
+    render: function (cfg) {
+      const catLabel = { air: 'FUERZA', veh: 'EJÉRCITO', mer: 'MARINA' };
+      const cats = ['air', 'veh', 'mer'];
+
+      // En-tête groupé par famille
+      const groupHead = cats
+        .map((c) => {
+          const span = cfg.formations.filter((f) => f.cat === c).length;
+          return `<th class="grp cat-${c}" colspan="${span}">${catLabel[c]}</th>`;
+        })
+        .join('');
+
+      // En-tête des formations (texte vertical)
+      const formHead = cfg.formations
+        .map((f) => `<th class="fcol cat-${f.cat}"><span>${f.nom}</span></th>`)
+        .join('');
+
+      // Lignes membres
+      const body = cfg.data
+        .map((m) => {
+          const cells = cfg.formations
+            .map((f) => {
+              const has = m.forms.includes(f.nom);
+              return `<td class="cell${has ? ' on cat-' + f.cat : ''}">${has
+                ? '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                : '·'}</td>`;
+            })
+            .join('');
+          return `<tr>
+            <td class="mrow">
+              <span class="mmat">${m.mat}</span>
+              <span class="mname">${m.nom}</span>
+            </td>
+            <td class="mcount">${m.forms.length}</td>
+            ${cells}
+          </tr>`;
+        })
+        .join('');
+
+      return `
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker">Certifications</span>
+            <h2 class="panel-title">MATRICE DES FORMATIONS</h2>
+          </div>
+          <span class="panel-count">${cfg.data.length} MEMBRES · ${cfg.formations.length} FORMATIONS</span>
         </div>
-        <span class="panel-count">${cfg.data.length} ARTICLES</span>
-      </div>
-      <div class="inv-grid">
-        ${cfg.data.map((it) => `
-          <article class="inv-card">
-            <div class="inv-top">
-              <span class="inv-cat">${it.categorie.toUpperCase()}</span>
-              <span class="inv-qty">${it.quantite}</span>
-            </div>
-            <div class="inv-name">${it.article}</div>
-            <div class="inv-meta">${it.mouvement}<br>par ${it.par}</div>
-          </article>`).join('')}
-      </div>`,
+        <div class="matrix-legend">
+          <span class="lg cat-air">Fuerza</span>
+          <span class="lg cat-veh">Ejército</span>
+          <span class="lg cat-mer">Marina</span>
+        </div>
+        <div class="table-wrap matrix-wrap">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th class="mrow" rowspan="2">Matricule</th>
+                <th class="mcount" rowspan="2">Nb</th>
+                ${groupHead}
+              </tr>
+              <tr>${formHead}</tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>`;
+    },
   },
 
   communications: {
@@ -510,16 +904,37 @@ const PAGES = {
           </article>`).join('')}
       </div>`,
   },
+
+  /* ─────────── GESTION DES COMPTES (réservé) ─────────── */
+  gestion: {
+    title: 'GESTION DES COMPTES',
+    desc: 'Administration des comptes, grades et mots de passe. Accès réservé.',
+    view: 'custom',
+    get data() { return ACCOUNTS; },
+    stats: (rows) => [
+      ['Comptes', rows.length],
+      ['Actifs', rows.filter((r) => Number(r.actif) !== 0).length],
+      ['En test', rows.filter((r) => r.statut === 'EN TEST').length],
+      ['Grades', new Set(rows.map((r) => r.grade)).size],
+    ],
+    render: () => `<div id="gestionRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadGestion(),
+  },
 };
 
 // Ordre d'affichage sur la grille d'accueil
 const HOME_ORDER = [
-  'effectifs', 'rapports', 'patrouilles', 'operations', 'absence', 'coffre',
+  'effectifs', 'rapports', 'patrouilles', 'operations', 'absence', 'formation',
   'detenus', 'hierarchie', 'blacklist', 'communications', 'sanctions', 'documentation',
   'carte', 'radio',
 ];
 
 let currentPage = 'accueil';
+
+// ── État d'authentification / données serveur ──
+let ME = null;        // compte connecté + permissions
+let GRADES = [];      // liste des grades (menus déroulants)
+let ACCOUNTS = [];    // comptes (page Gestion)
 
 // ── Éléments DOM ──
 const sidebar = document.getElementById('sidebar');
@@ -584,6 +999,7 @@ function navigate(page) {
       tableSection.hidden = true;
       customSection.hidden = false;
       customSection.innerHTML = cfg.render(cfg);
+      if (cfg.afterRender) cfg.afterRender(cfg);
     } else {
       customSection.hidden = true;
       tableSection.hidden = false;
@@ -641,7 +1057,12 @@ function renderTable() {
 searchInput.addEventListener('input', renderTable);
 
 newBtn.addEventListener('click', () => {
-  // TODO : formulaire d'ajout par rubrique
+  // L'ajout de membre passe par la Gestion des comptes (droits requis)
+  if (currentPage === 'effectifs') {
+    if (ME && (ME.peut_ajouter_effectif || ME.peut_modifier_comptes)) navigate('gestion');
+    else alert("Seuls les grades Comando / Dirección peuvent ajouter un membre.");
+    return;
+  }
   alert(`${PAGES[currentPage]?.addLabel || 'Ajouter'} — à implémenter`);
 });
 
@@ -672,6 +1093,282 @@ function updateHomeStats() {
     countBy(PAGES.carte.data, 'statut', 'ALERTE') + countBy(PAGES.communications.data, 'priorite', 'URGENTE');
 }
 
+// Recalcule le bandeau de stats de la page courante
+function refreshStats(page) {
+  const cfg = PAGES[page];
+  if (!cfg) return;
+  pageStats.innerHTML = cfg.stats(cfg.data).map(([label, value]) => `
+    <div class="stat-box"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></div>`).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   AUTHENTIFICATION + API + GESTION DES COMPTES
+   ═══════════════════════════════════════════════ */
+
+// Grades de secours (mode démo, sans serveur)
+const DEMO_GRADES = [
+  { id: 1, nom: 'General', section: 'direction', niveau: 100 },
+  { id: 2, nom: 'SubGeneral', section: 'direction', niveau: 95 },
+  { id: 3, nom: 'Coronel', section: 'direction', niveau: 90 },
+  { id: 4, nom: 'Teniente Coronel', section: 'direction', niveau: 85 },
+  { id: 5, nom: 'Comandante', section: 'comando', niveau: 80 },
+  { id: 6, nom: 'Capitán Primero', section: 'comando', niveau: 75 },
+  { id: 7, nom: 'Capitán Segundo', section: 'comando', niveau: 70 },
+  { id: 8, nom: 'Teniente', section: 'comando', niveau: 65 },
+  { id: 9, nom: 'Alfarez Primero', section: 'liderazgo', niveau: 60 },
+  { id: 10, nom: 'Alfarez Segundo', section: 'liderazgo', niveau: 55 },
+  { id: 11, nom: 'Sargento Primero', section: 'liderazgo', niveau: 50 },
+  { id: 12, nom: 'Sargento de la Milicia', section: 'liderazgo', niveau: 45 },
+  { id: 13, nom: 'Cabo', section: 'aplicacion', niveau: 40 },
+  { id: 14, nom: 'Soldado Primera', section: 'aplicacion', niveau: 35 },
+  { id: 15, nom: 'Soldado', section: 'aplicacion', niveau: 30 },
+  { id: 16, nom: 'Recluta', section: 'aplicacion', niveau: 25 },
+];
+
+// Appel API JSON (Vercel serverless + Supabase, auth par token)
+const TOKEN_KEY = 'milicia.token';
+async function api(action, body) {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const res = await fetch(`/api/milicia?action=${action}`, {
+    method: body ? 'POST' : 'GET',
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({ error: 'Réponse serveur invalide' }));
+  if (!res.ok || data.error) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
+const loginOverlay = document.getElementById('loginOverlay');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+
+function showLogin(msg) {
+  loginOverlay.hidden = false;
+  if (msg) { loginError.textContent = msg; loginError.hidden = false; }
+}
+function hideLogin() { loginOverlay.hidden = true; loginError.hidden = true; }
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  loginError.hidden = true;
+  const matricule = document.getElementById('loginMat').value.trim();
+  const mot_de_passe = document.getElementById('loginPwd').value;
+  try {
+    const r = await api('login', { matricule, mot_de_passe });
+    localStorage.setItem(TOKEN_KEY, r.token);
+    ME = r.user;
+    hideLogin();
+    await afterLogin();
+  } catch (err) {
+    loginError.textContent = err.message;
+    loginError.hidden = false;
+  }
+});
+
+// Mode démo : pas de serveur, droits Dirección complets sur les données locales
+document.getElementById('loginDemo').addEventListener('click', async () => {
+  ME = {
+    matricule: '00', nom: 'Démo Dirección', grade: 'General', section: 'direction', niveau: 100,
+    peut_ajouter_effectif: 1, peut_modifier_comptes: 1, peut_voir_mdp: 1, peut_gerer_grades: 1, demo: true,
+  };
+  GRADES = DEMO_GRADES;
+  hideLogin();
+  await afterLogin();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem(TOKEN_KEY);
+  location.reload();
+});
+
+// Après connexion : charge les données, applique les droits, ouvre l'accueil
+async function afterLogin() {
+  if (!ME.demo) {
+    try {
+      const eff = await api('effectifs');
+      PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut }));
+      const fm = await api('formations');
+      if (fm.certifs) PAGES.formation.certifs = fm.certifs;
+      GRADES = (await api('grades')).grades || DEMO_GRADES;
+    } catch (e) {
+      console.warn('Chargement des données:', e.message);
+    }
+  }
+
+  document.getElementById('operatorName').textContent = `${ME.matricule} | ${ME.nom}`;
+  document.getElementById('logoutBtn').hidden = false;
+
+  // Section réservée visible selon les droits
+  const canAdmin = ME.peut_ajouter_effectif || ME.peut_modifier_comptes || ME.peut_voir_mdp;
+  document.querySelectorAll('.nav-admin').forEach((el) => { el.hidden = !canAdmin; });
+
+  buildHomeGrid();
+  updateHomeStats();
+  navigate('accueil');
+}
+
+// ── Page Gestion des comptes ──
+async function loadGestion() {
+  const root = document.getElementById('gestionRoot');
+  if (!root) return;
+  try {
+    if (ME.demo) {
+      ACCOUNTS = PAGES.effectifs.data.map((e) => ({
+        matricule: e.matricule, nom: e.nom, grade: e.grade, statut: e.statut, actif: 1,
+        grade_id: (DEMO_GRADES.find((g) => g.nom === e.grade) || {}).id,
+        mot_de_passe: 'MILICIA-' + e.matricule,
+      }));
+    } else {
+      ACCOUNTS = (await api('accounts')).accounts || [];
+    }
+  } catch (e) {
+    root.innerHTML = `<div class="empty-state"><div class="empty-title">ACCÈS REFUSÉ</div><div class="empty-sub">${e.message}</div></div>`;
+    return;
+  }
+  renderGestion();
+  refreshStats('gestion');
+}
+
+function gradeOptions(selectedId) {
+  return GRADES.map((g) => `<option value="${g.id}"${Number(g.id) === Number(selectedId) ? ' selected' : ''}>${g.nom}</option>`).join('');
+}
+
+function renderGestion() {
+  const root = document.getElementById('gestionRoot');
+  const canAdd = !!ME.peut_ajouter_effectif;
+  const canEdit = !!ME.peut_modifier_comptes;
+  const canPwd = !!ME.peut_voir_mdp;
+  const dis = canEdit ? '' : 'disabled';
+
+  const addRow = canAdd ? `
+    <div class="gest-add">
+      <input class="gest-in" id="addMat" placeholder="N°" style="max-width:70px">
+      <input class="gest-in" id="addNom" placeholder="Nom complet">
+      <select class="gest-in" id="addGrade">${gradeOptions(16)}</select>
+      <select class="gest-in" id="addStatut"><option>TITULAIRE</option><option>EN TEST</option></select>
+      <input class="gest-in" id="addPwd" placeholder="Mot de passe (auto si vide)">
+      <button class="btn btn-primary btn-sm" id="addBtn">AJOUTER</button>
+    </div>` : '';
+
+  const rows = ACCOUNTS.map((a) => `
+    <tr data-mat="${a.matricule}">
+      <td class="gest-mat">${a.matricule}</td>
+      <td><input class="gest-in gest-nom" value="${(a.nom || '').replace(/"/g, '&quot;')}" ${dis}></td>
+      <td><select class="gest-in gest-grade" ${dis}>${gradeOptions(a.grade_id)}</select></td>
+      <td><select class="gest-in gest-statut" ${dis}>
+        <option${a.statut === 'TITULAIRE' ? ' selected' : ''}>TITULAIRE</option>
+        <option${a.statut === 'EN TEST' ? ' selected' : ''}>EN TEST</option>
+      </select></td>
+      ${canPwd ? `<td><input class="gest-in gest-pwd" value="${(a.mot_de_passe || '').replace(/"/g, '&quot;')}" ${dis}></td>` : ''}
+      <td class="gest-actions">
+        ${canEdit ? `<button class="btn btn-ghost btn-sm gest-save">Enregistrer</button>
+        <button class="gest-del" title="Supprimer">✕</button>` : '<span class="gest-ro">lecture seule</span>'}
+      </td>
+    </tr>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <span class="panel-kicker">Administration</span>
+        <h2 class="panel-title">COMPTES</h2>
+      </div>
+      <span class="panel-count">${ACCOUNTS.length} COMPTES</span>
+    </div>
+    ${addRow}
+    <div class="table-wrap">
+      <table class="data-table gest-table">
+        <thead><tr>
+          <th>N°</th><th>Nom</th><th>Grade</th><th>Statut</th>${canPwd ? '<th>Mot de passe</th>' : ''}<th class="th-right">Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  // Ajout
+  root.querySelector('#addBtn')?.addEventListener('click', async () => {
+    const payload = {
+      matricule: root.querySelector('#addMat').value.trim(),
+      nom: root.querySelector('#addNom').value.trim(),
+      grade_id: +root.querySelector('#addGrade').value,
+      statut: root.querySelector('#addStatut').value,
+      mot_de_passe: root.querySelector('#addPwd').value,
+    };
+    if (!payload.matricule || !payload.nom) { alert('Matricule et nom obligatoires.'); return; }
+    await accountAdd(payload);
+  });
+
+  // Enregistrer / Supprimer par ligne
+  root.querySelectorAll('tr[data-mat]').forEach((tr) => {
+    const mat = tr.dataset.mat;
+    tr.querySelector('.gest-save')?.addEventListener('click', async () => {
+      await accountUpdate({
+        matricule: mat,
+        nom: tr.querySelector('.gest-nom').value.trim(),
+        grade_id: +tr.querySelector('.gest-grade').value,
+        statut: tr.querySelector('.gest-statut').value,
+        mot_de_passe: tr.querySelector('.gest-pwd') ? tr.querySelector('.gest-pwd').value : undefined,
+      });
+    });
+    tr.querySelector('.gest-del')?.addEventListener('click', async () => {
+      if (!confirm(`Supprimer le compte ${mat} ?`)) return;
+      await accountDelete(mat);
+    });
+  });
+}
+
+// Actions comptes (serveur ou démo local)
+async function accountAdd(p) {
+  if (ME.demo) {
+    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { alert('Matricule déjà utilisé.'); return; }
+    const grade = (DEMO_GRADES.find((g) => g.id === p.grade_id) || {}).nom || 'Recluta';
+    PAGES.effectifs.data.push({ matricule: p.matricule, nom: p.nom, grade, statut: p.statut });
+  } else {
+    try { await api('account_add', p); await api('effectifs').then((eff) => { PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut })); }); }
+    catch (e) { alert(e.message); return; }
+  }
+  updateHomeStats();
+  await loadGestion();
+}
+
+async function accountUpdate(p) {
+  if (ME.demo) {
+    const grade = (DEMO_GRADES.find((g) => g.id === p.grade_id) || {}).nom || 'Recluta';
+    const row = PAGES.effectifs.data.find((e) => e.matricule === p.matricule);
+    if (row) { row.nom = p.nom; row.grade = grade; row.statut = p.statut; }
+  } else {
+    try { await api('account_update', p); await api('effectifs').then((eff) => { PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut })); }); }
+    catch (e) { alert(e.message); return; }
+  }
+  await loadGestion();
+}
+
+async function accountDelete(mat) {
+  if (ME.demo) {
+    PAGES.effectifs.data = PAGES.effectifs.data.filter((e) => e.matricule !== mat);
+  } else {
+    try { await api('account_delete', { matricule: mat }); await api('effectifs').then((eff) => { PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut })); }); }
+    catch (e) { alert(e.message); return; }
+  }
+  updateHomeStats();
+  await loadGestion();
+}
+
 // ── Init ──
-buildHomeGrid();
-updateHomeStats();
+async function boot() {
+  buildHomeGrid();
+  updateHomeStats();
+  try {
+    const me = await api('me');
+    if (me && me.matricule) { ME = me; await afterLogin(); }
+    else showLogin();
+  } catch (e) {
+    // Pas de backend joignable → écran de connexion (+ mode démo possible)
+    showLogin('Serveur non joignable. Utilisez le mode démo ou vérifiez api.php / la base.');
+  }
+}
+
+boot();
