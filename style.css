@@ -27,7 +27,7 @@
   /* Texte */
   --text-hi: #e8f2e8;
   --text-mid: #9db49d;
-  --text-low: #5c705c;
+  --text-low: #788c78; /* éclairci : ~5.5:1 sur le fond (WCAG AA) */
 
   /* Bordures */
   --border: rgba(74, 222, 128, 0.12);
@@ -47,6 +47,28 @@
 
 /* L'attribut hidden doit toujours l'emporter sur display:flex/grid/block */
 [hidden] { display: none !important; }
+
+/* Accessibilité : focus clavier visible sur tous les éléments interactifs */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--green-400);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Accessibilité : respect de « réduire les animations » */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 html {
   background: var(--bg-base);
@@ -1780,3 +1802,181 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 }
 .pat-form .gest-in { flex: 1; min-width: 130px; }
 .pat-form #patType { flex: 0 0 auto; min-width: 120px; }
+
+/* ═══════════════ ABSENCES ═══════════════ */
+.abs-form {
+  padding: 14px;
+  margin-bottom: 6px;
+  background: var(--bg-base);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.abs-you {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--text-mid);
+  margin-bottom: 10px;
+}
+.abs-you b { color: var(--green-300); }
+.abs-fields { display: flex; gap: 8px; flex-wrap: wrap; }
+.abs-fields .gest-in { flex: 1; min-width: 150px; }
+
+.abs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.abs-card {
+  position: relative;
+  padding: 15px 16px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.abs-card.mine { border-color: var(--border-strong); box-shadow: 0 0 14px var(--green-glow); }
+.abs-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 12.5px;
+  color: var(--text-low);
+  border-bottom: 1px solid rgba(74, 222, 128, 0.06);
+}
+.abs-card .abs-line:last-of-type { border-bottom: none; }
+.abs-line b { color: var(--text-hi); font-weight: 600; text-align: right; }
+.abs-card .abs-del { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; }
+
+/* ═══════════════ CHAMP DATE + BOUTON ÉCLAIR ═══════════════ */
+.abs-fields .field-with-bolt { flex: 1; min-width: 190px; }
+.field-with-bolt {
+  position: relative;
+  display: flex;
+}
+.field-with-bolt .gest-in { flex: 1; width: 100%; padding-right: 36px; }
+.bolt-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--green-400);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.bolt-btn:hover { background: rgba(74, 222, 128, 0.14); }
+.bolt-btn svg { width: 15px; height: 15px; }
+
+/* ═══════════════ RAPPORTS ═══════════════ */
+.rap-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 6px;
+  background: var(--bg-base);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.rap-field { display: flex; flex-direction: column; gap: 6px; }
+.rap-field > span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-mid);
+}
+.rap-field em { color: var(--danger); font-style: normal; }
+.rap-area {
+  min-height: 80px;
+  padding: 10px 12px;
+  resize: vertical;
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+.rap-form .field-with-bolt { max-width: 260px; }
+.rap-form .btn-primary { align-self: flex-start; }
+
+.rap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.rap-card {
+  position: relative;
+  padding: 15px 16px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--olive-dim);
+  border-radius: var(--radius-sm);
+}
+.rap-card.mine { border-left-color: var(--green-500); box-shadow: 0 0 14px var(--green-glow); }
+.rap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.rap-date { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--text-hi); }
+.rap-by { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.5px; color: var(--text-low); }
+.rap-line { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--text-low); margin-bottom: 10px; }
+.rap-line b { color: var(--text-hi); font-weight: 600; text-align: right; }
+.rap-block { margin-bottom: 9px; }
+.rap-block > span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-low);
+  margin-bottom: 4px;
+}
+.rap-block p { font-size: 12.5px; color: var(--text-mid); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+
+/* ═══════════════ BOUTON SUPPRIMER (rapports) ═══════════════ */
+.rap-actions {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+.btn-danger {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.btn-danger:hover {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.2);
+}
+.btn-danger svg { width: 15px; height: 15px; }
+
+/* ═══════════════ FORMULAIRE SANCTION ═══════════════ */
+.sanc-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: var(--bg-base);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.sanc-form .gest-in { flex: 1; min-width: 150px; }
+.sanc-form #sancType { flex: 0 0 auto; min-width: 150px; }
+.sanc-form .field-with-bolt { flex: 0 0 auto; min-width: 190px; }

@@ -4,7 +4,7 @@
 -- ════════════════════════════════════════════════════════════════
 
 DROP VIEW  IF EXISTS v_presence, v_comptes_admin, v_comptes_perms, v_effectifs;
-DROP TABLE IF EXISTS journal_comptes, presence, postes, patrouilles,
+DROP TABLE IF EXISTS journal_comptes, presence, postes, patrouilles, absences, rapports, sanctions,
                      compte_formations, formations, comptes, grades CASCADE;
 
 -- ── 1. GRADES + permissions ─────────────────────────────────────
@@ -200,6 +200,41 @@ CREATE TABLE patrouilles (
   statut           VARCHAR(12) NOT NULL DEFAULT 'EN COURS' CHECK (statut IN ('EN COURS','TERMINÉE')),
   auteur_matricule VARCHAR(6),
   date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
+-- ── 4e. SANCTIONS ───────────────────────────────────────────────
+CREATE TABLE sanctions (
+  id               SERIAL PRIMARY KEY,
+  membre           VARCHAR(120),
+  type             VARCHAR(20),
+  motif            VARCHAR(255),
+  prononcee_par    VARCHAR(80),
+  date_sanction    VARCHAR(40),
+  auteur_matricule VARCHAR(6),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
+-- ── 4d. RAPPORTS ────────────────────────────────────────────────
+CREATE TABLE rapports (
+  id               SERIAL PRIMARY KEY,
+  date_rapport     VARCHAR(40),
+  agent_rapport    VARCHAR(80),
+  concerne         VARCHAR(120),
+  fait             TEXT,
+  note             TEXT,
+  auteur_matricule VARCHAR(6),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
+-- ── 4c. ABSENCES ────────────────────────────────────────────────
+CREATE TABLE absences (
+  id            SERIAL PRIMARY KEY,
+  matricule     VARCHAR(6),
+  nom           VARCHAR(80),
+  date_depart   VARCHAR(40),
+  date_retour   VARCHAR(40),
+  raison        VARCHAR(200),
+  date_creation TIMESTAMPTZ NOT NULL DEFAULT now()
 ) ;
 
 -- ── 5. JOURNAL ──────────────────────────────────────────────────

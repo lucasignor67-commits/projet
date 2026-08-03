@@ -36,6 +36,14 @@ const DEMO_POSTS_KEY = 'milicia.posts';
 const memberName = (mat) => { const e = PAGES.effectifs.data.find((x) => x.matricule === mat); return e ? e.nom : mat; };
 const occupantsAt = (nom) => Object.keys(PRESENCE).filter((mat) => PRESENCE[mat] === nom);
 
+// Tri par numéro de matricule croissant (du plus bas au plus haut)
+const byMatricule = (a, b) => Number(a.matricule) - Number(b.matricule);
+function setEffectifs(eff) {
+  PAGES.effectifs.data = eff
+    .map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut }))
+    .sort(byMatricule);
+}
+
 // Catégories de formations : clés internes (air/veh/mer) ↔ base (fuerza/ejercito/marina)
 const CAT_DB_TO_UI = { fuerza: 'air', ejercito: 'veh', marina: 'mer' };
 const CAT_UI_TO_DB = { air: 'fuerza', veh: 'ejercito', mer: 'marina' };
@@ -177,31 +185,15 @@ const PAGES = {
 
   rapports: {
     title: 'RAPPORTS',
-    desc: "Comptes rendus d'intervention et rapports internes.",
-    kicker: 'Comptes rendus',
-    listTitle: 'REGISTRE DES RAPPORTS',
-    addLabel: 'NOUVEAU RAPPORT',
-    columns: [
-      { key: 'num', label: 'N°' },
-      { key: 'type', label: 'Type' },
-      { key: 'titre', label: 'Titre' },
-      { key: 'auteur', label: 'Auteur' },
-      { key: 'date', label: 'Date' },
-      { key: 'statut', label: 'Statut', badge: true, align: 'right' },
-    ],
+    desc: 'Rédiger et consulter les rapports de la milice.',
+    view: 'custom',
+    get data() { return RAPPORTS; },
     stats: (rows) => [
-      ['Total', rows.length],
-      ['En cours', countBy(rows, 'statut', 'EN COURS')],
-      ['Validés', countBy(rows, 'statut', 'VALIDÉ')],
-      ['Classés', countBy(rows, 'statut', 'CLASSÉ')],
+      ['Rapports', rows.length],
+      ['Les miens', rows.filter((r) => ME && r.auteur_matricule === ME.matricule).length],
     ],
-    data: [
-      { num: 'R-015', type: 'Incident', titre: 'Bateau non identifié au large du lagon', auteur: 'El Comandante', date: '23/07/2026', statut: 'EN COURS' },
-      { num: 'R-014', type: 'Intervention', titre: 'Intrusion plage nord', auteur: 'Mateo Vargas', date: '21/07/2026', statut: 'VALIDÉ' },
-      { num: 'R-013', type: 'Incident', titre: 'Rixe au camp principal', auteur: 'Lucía Fuentes', date: '19/07/2026', statut: 'EN COURS' },
-      { num: 'R-012', type: 'Saisie', titre: "Saisie d'armes au port", auteur: 'Diego Salazar', date: '17/07/2026', statut: 'VALIDÉ' },
-      { num: 'R-011', type: 'Patrouille', titre: 'RAS secteur aérodrome', auteur: 'Carmen Reyes', date: '15/07/2026', statut: 'CLASSÉ' },
-    ],
+    render: () => `<div id="rapRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadRapports(),
   },
 
   patrouilles: {
@@ -247,28 +239,15 @@ const PAGES = {
 
   absence: {
     title: 'ABSENCE',
-    desc: "Déclarations d'absence et indisponibilités du personnel.",
-    kicker: 'Personnel',
-    listTitle: 'REGISTRE DES ABSENCES',
-    addLabel: 'DÉCLARER UNE ABSENCE',
-    columns: [
-      { key: 'membre', label: 'Membre' },
-      { key: 'motif', label: 'Motif' },
-      { key: 'du', label: 'Du' },
-      { key: 'au', label: 'Au' },
-      { key: 'statut', label: 'Statut', badge: true, align: 'right' },
-    ],
+    desc: 'Déclarez votre absence — vous êtes automatiquement identifié.',
+    view: 'custom',
+    get data() { return ABSENCES; },
     stats: (rows) => [
-      ['Total', rows.length],
-      ['En attente', countBy(rows, 'statut', 'EN ATTENTE')],
-      ['Validées', countBy(rows, 'statut', 'VALIDÉE')],
-      ['Refusées', countBy(rows, 'statut', 'REFUSÉE')],
+      ['Absences', rows.length],
+      ['Les miennes', rows.filter((r) => ME && r.matricule === ME.matricule).length],
     ],
-    data: [
-      { membre: 'Carmen Reyes', motif: "Déplacement hors de l'île", du: '20/07/2026', au: '28/07/2026', statut: 'VALIDÉE' },
-      { membre: 'Álvaro Mendoza', motif: 'Raisons personnelles', du: '24/07/2026', au: '26/07/2026', statut: 'EN ATTENTE' },
-      { membre: 'Diego Salazar', motif: 'Blessure en service', du: '10/07/2026', au: '15/07/2026', statut: 'VALIDÉE' },
-    ],
+    render: () => `<div id="absRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadAbsences(),
   },
 
   detenus: {
@@ -326,27 +305,17 @@ const PAGES = {
 
   sanctions: {
     title: 'SANCTIONS',
-    desc: 'Sanctions disciplinaires et avertissements du personnel.',
-    kicker: 'Discipline',
-    listTitle: 'REGISTRE DISCIPLINAIRE',
-    addLabel: 'NOUVELLE SANCTION',
-    columns: [
-      { key: 'membre', label: 'Membre' },
-      { key: 'type', label: 'Type', badge: true },
-      { key: 'motif', label: 'Motif' },
-      { key: 'par', label: 'Prononcée par' },
-      { key: 'date', label: 'Date', align: 'right' },
-    ],
+    desc: 'Registre disciplinaire de la milice.',
+    view: 'custom',
+    get data() { return SANCTIONS; },
     stats: (rows) => [
       ['Total', rows.length],
-      ['Avertissements', countBy(rows, 'type', 'AVERTISSEMENT')],
-      ['Blâmes', countBy(rows, 'type', 'BLÂME')],
-      ['Rétrogradations', countBy(rows, 'type', 'RÉTROGRADATION')],
+      ['Avertissements', rows.filter((r) => r.type === 'AVERTISSEMENT').length],
+      ['Blâmes', rows.filter((r) => r.type === 'BLÂME').length],
+      ['Rétrogradations', rows.filter((r) => r.type === 'RÉTROGRADATION').length],
     ],
-    data: [
-      { membre: 'Álvaro Mendoza', type: 'AVERTISSEMENT', motif: 'Retards répétés aux prises de service', par: 'Lucía Fuentes', date: '19/07/2026' },
-      { membre: 'Diego Salazar', type: 'BLÂME', motif: "Usage non autorisé d'un véhicule", par: 'Mateo Vargas', date: '11/07/2026' },
-    ],
+    render: () => `<div id="sancRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadSanctions(),
   },
 
   radio: {
@@ -772,24 +741,26 @@ const PAGES = {
     render: function (cfg) {
       const catLabel = { air: 'FUERZA', veh: 'EJÉRCITO', mer: 'MARINA' };
       const cats = ['air', 'veh', 'mer'];
+      // Colonnes regroupées par catégorie (une nouvelle formation reste dans sa famille)
+      const forms = cats.flatMap((c) => cfg.formations.filter((f) => f.cat === c));
 
       // En-tête groupé par famille
       const groupHead = cats
         .map((c) => {
-          const span = cfg.formations.filter((f) => f.cat === c).length;
-          return `<th class="grp cat-${c}" colspan="${span}">${catLabel[c]}</th>`;
+          const span = forms.filter((f) => f.cat === c).length;
+          return span ? `<th class="grp cat-${c}" colspan="${span}">${catLabel[c]}</th>` : '';
         })
         .join('');
 
       // En-tête des formations (texte vertical)
-      const formHead = cfg.formations
+      const formHead = forms
         .map((f) => `<th class="fcol cat-${f.cat}"><span>${f.nom}</span></th>`)
         .join('');
 
       // Lignes membres
       const body = cfg.data
         .map((m) => {
-          const cells = cfg.formations
+          const cells = forms
             .map((f) => {
               const has = m.forms.includes(f.nom);
               return `<td class="cell${has ? ' on cat-' + f.cat : ''}">${has
@@ -961,10 +932,11 @@ const PAGES = {
       ];
     },
     render: function (cfg) {
-      const formations = PAGES.formation.formations;
       const members = cfg.data;
       const catLabel = { air: 'FUERZA', veh: 'EJÉRCITO', mer: 'MARINA' };
       const cats = ['air', 'veh', 'mer'];
+      // Colonnes regroupées par catégorie (une nouvelle formation reste dans sa famille)
+      const formations = cats.flatMap((c) => PAGES.formation.formations.filter((f) => f.cat === c));
       const check = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
       const groupHead = cats.map((c) => {
@@ -1027,8 +999,11 @@ let ME = null;        // compte connecté + permissions
 let GRADES = [];      // liste des grades (menus déroulants)
 let ACCOUNTS = [];    // comptes (page Gestion des comptes)
 let FORMS = [];       // formations (page Gestion des formations)
-let GEST_SORT = 'grade'; // tri de la page Gestion des comptes : grade | matricule | recent
+let GEST_SORT = 'matricule'; // tri de la page Gestion des comptes : grade | matricule | recent
 let PATROUILLES = [];    // patrouilles (page Patrouilles)
+let ABSENCES = [];       // absences (page Absence)
+let RAPPORTS = [];       // rapports (page Rapports)
+let SANCTIONS = [];      // sanctions (page Sanctions)
 
 // ── Éléments DOM ──
 const sidebar = document.getElementById('sidebar');
@@ -1285,7 +1260,7 @@ async function afterLogin() {
   if (!ME.demo) {
     try {
       const eff = await api('effectifs');
-      PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut }));
+      setEffectifs(eff);
       const fm = await api('formations');
       if (fm.certifs) PAGES.formation.certifs = fm.certifs;
       if (fm.formations && fm.formations.length) {
@@ -1484,8 +1459,9 @@ async function accountAdd(p) {
     if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { alert('Matricule déjà utilisé.'); return; }
     const grade = (DEMO_GRADES.find((g) => g.id === p.grade_id) || {}).nom || 'Recluta';
     PAGES.effectifs.data.push({ matricule: p.matricule, nom: p.nom, grade, statut: p.statut });
+    PAGES.effectifs.data.sort(byMatricule);
   } else {
-    try { await api('account_add', p); await api('effectifs').then((eff) => { PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut })); }); }
+    try { await api('account_add', p); await api('effectifs').then((eff) => setEffectifs(eff)); }
     catch (e) { alert(e.message); return; }
   }
   updateHomeStats();
@@ -1498,7 +1474,7 @@ async function accountUpdate(p) {
     const row = PAGES.effectifs.data.find((e) => e.matricule === p.matricule);
     if (row) { row.nom = p.nom; row.grade = grade; row.statut = p.statut; }
   } else {
-    try { await api('account_update', p); await api('effectifs').then((eff) => { PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut })); }); }
+    try { await api('account_update', p); await api('effectifs').then((eff) => setEffectifs(eff)); }
     catch (e) { alert(e.message); return; }
   }
   await loadGestion();
@@ -1508,11 +1484,368 @@ async function accountDelete(mat) {
   if (ME.demo) {
     PAGES.effectifs.data = PAGES.effectifs.data.filter((e) => e.matricule !== mat);
   } else {
-    try { await api('account_delete', { matricule: mat }); await api('effectifs').then((eff) => { PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut })); }); }
+    try { await api('account_delete', { matricule: mat }); await api('effectifs').then((eff) => setEffectifs(eff)); }
     catch (e) { alert(e.message); return; }
   }
   updateHomeStats();
   await loadGestion();
+}
+
+// ── Page Sanctions ──
+const SANC_TYPES = ['AVERTISSEMENT', 'BLÂME', 'RÉTROGRADATION', 'EXCLUSION'];
+
+async function loadSanctions() {
+  const root = document.getElementById('sancRoot');
+  if (!root) return;
+  try {
+    if (!ME.demo) SANCTIONS = (await api('sanctions')).sanctions || [];
+  } catch (e) {
+    root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`;
+    return;
+  }
+  renderSanctions();
+  refreshStats('sanctions');
+}
+
+function sanctionRow(s, canDel) {
+  return `<tr>
+    <td>${escapeHtml(s.membre) || '—'}</td>
+    <td>${badge(s.type)}</td>
+    <td>${escapeHtml(s.motif) || '—'}</td>
+    <td>${escapeHtml(s.prononcee_par) || '—'}</td>
+    <td${canDel ? '' : ' style="text-align:right"'}>${escapeHtml(s.date_sanction) || '—'}</td>
+    ${canDel ? `<td class="th-right"><button class="gest-del sanc-del" data-id="${s.id}" title="Supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td>` : ''}
+  </tr>`;
+}
+
+function renderSanctions() {
+  const root = document.getElementById('sancRoot');
+  if (!root) return;
+  // Seuls le Commandement / Direction peuvent encoder ou supprimer
+  const canManage = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Discipline</span><h2 class="panel-title">REGISTRE DISCIPLINAIRE</h2></div>
+      <span class="panel-count" id="sancCount">${SANCTIONS.length}</span>
+    </div>
+    <div class="filter-row">
+      <div class="search-field">
+        <input type="text" id="sancSearch" placeholder="Rechercher dans la rubrique" autocomplete="off">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      ${canManage ? `<button class="btn btn-primary" id="sancNew">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        NOUVELLE SANCTION
+      </button>` : ''}
+    </div>
+
+    ${canManage ? `
+    <div class="sanc-form" id="sancForm" hidden>
+      <input class="gest-in" id="sancMembre" placeholder="Membre (matricule + nom)">
+      <select class="gest-in" id="sancType">${SANC_TYPES.map((t) => `<option>${t}</option>`).join('')}</select>
+      <input class="gest-in" id="sancMotif" placeholder="Motif">
+      <div class="field-with-bolt">
+        <input class="gest-in" id="sancDate" placeholder="Date (JJ/MM/AAAA)">
+        <button class="bolt-btn" id="sancDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="sancAddBtn">ENREGISTRER</button>
+    </div>` : ''}
+
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>Membre</th><th>Type</th><th>Motif</th><th>Prononcée par</th>
+          <th${canManage ? '' : ' class="th-right"'}>Date</th>${canManage ? '<th class="th-right">Action</th>' : ''}
+        </tr></thead>
+        <tbody id="sancBody">${SANCTIONS.map((s) => sanctionRow(s, canManage)).join('')}</tbody>
+      </table>
+      ${SANCTIONS.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUNE SANCTION</div><div class="empty-sub">Le registre disciplinaire est vide.</div></div>'}
+    </div>`;
+
+  // Recherche (met à jour seulement le corps du tableau)
+  const search = root.querySelector('#sancSearch');
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    const filtered = SANCTIONS.filter((s) => !q || [s.membre, s.type, s.motif, s.prononcee_par, s.date_sanction].some((v) => String(v || '').toLowerCase().includes(q)));
+    root.querySelector('#sancBody').innerHTML = filtered.map((s) => sanctionRow(s, canManage)).join('');
+    root.querySelector('#sancCount').textContent = filtered.length;
+    root.querySelectorAll('.sanc-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer cette sanction ?')) sanctionDelete(+b.dataset.id); }));
+  });
+
+  if (canManage) {
+    const form = root.querySelector('#sancForm');
+    root.querySelector('#sancNew').addEventListener('click', () => { form.hidden = !form.hidden; });
+    root.querySelector('#sancDateNow').addEventListener('click', () => { root.querySelector('#sancDate').value = todayFR(); });
+    root.querySelector('#sancAddBtn').addEventListener('click', () => {
+      sanctionAdd({
+        membre: root.querySelector('#sancMembre').value.trim(),
+        type: root.querySelector('#sancType').value,
+        motif: root.querySelector('#sancMotif').value.trim(),
+        date_sanction: root.querySelector('#sancDate').value.trim(),
+      });
+    });
+  }
+  root.querySelectorAll('.sanc-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer cette sanction ?')) sanctionDelete(+b.dataset.id); }));
+}
+
+async function reloadSanctions() {
+  try { SANCTIONS = (await api('sanctions')).sanctions || []; } catch (e) {}
+}
+
+async function sanctionAdd(p) {
+  if (!p.membre || !p.motif || !p.date_sanction) { alert('Membre, motif et date sont obligatoires.'); return; }
+  if (ME.demo) {
+    SANCTIONS.unshift({ id: Date.now(), prononcee_par: ME.nom, auteur_matricule: ME.matricule, ...p });
+  } else {
+    try { await api('sanction_add', p); } catch (e) { alert(e.message); return; }
+    await reloadSanctions();
+  }
+  renderSanctions();
+  refreshStats('sanctions');
+}
+
+async function sanctionDelete(id) {
+  if (ME.demo) {
+    SANCTIONS = SANCTIONS.filter((x) => x.id !== id);
+  } else {
+    try { await api('sanction_delete', { id }); } catch (e) { alert(e.message); return; }
+    await reloadSanctions();
+  }
+  renderSanctions();
+  refreshStats('sanctions');
+}
+
+// ── Page Rapports ──
+async function loadRapports() {
+  const root = document.getElementById('rapRoot');
+  if (!root) return;
+  try {
+    if (!ME.demo) RAPPORTS = (await api('rapports')).rapports || [];
+  } catch (e) {
+    root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`;
+    return;
+  }
+  renderRapports();
+  refreshStats('rapports');
+}
+
+function escapeHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function renderRapports() {
+  const root = document.getElementById('rapRoot');
+  if (!root) return;
+  // Seuls le Commandement (comando) et la Direction (direction) peuvent supprimer
+  const canDel = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
+
+  const cards = RAPPORTS.map((r) => `
+    <article class="rap-card${ME && r.auteur_matricule === ME.matricule ? ' mine' : ''}">
+      <div class="rap-head">
+        <span class="rap-date">${escapeHtml(r.date_rapport) || '—'}</span>
+        <span class="rap-by">Rapport par ${escapeHtml(r.agent_rapport) || '—'}</span>
+      </div>
+      <div class="rap-line"><span>Agent concerné</span><b>${escapeHtml(r.concerne) || '—'}</b></div>
+      <div class="rap-block"><span>Fait commis</span><p>${escapeHtml(r.fait) || '—'}</p></div>
+      ${r.note ? `<div class="rap-block"><span>Note supplémentaire</span><p>${escapeHtml(r.note)}</p></div>` : ''}
+      ${canDel ? `<div class="rap-actions">
+        <button class="btn btn-danger btn-sm rap-del" data-id="${r.id}">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          SUPPRIMER LE RAPPORT
+        </button>
+      </div>` : ''}
+    </article>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Nouveau</span><h2 class="panel-title">RÉDIGER UN RAPPORT</h2></div>
+    </div>
+    <div class="rap-form">
+      <label class="rap-field">
+        <span>Date <em>*</em></span>
+        <div class="field-with-bolt">
+          <input class="gest-in" id="rapDate" placeholder="JJ/MM/AAAA">
+          <button class="bolt-btn" id="rapDateNow" type="button" title="Aujourd'hui">
+            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </label>
+      <label class="rap-field">
+        <span>Matricule de l'agent qui fait le rapport <em>*</em></span>
+        <input class="gest-in" id="rapAgent" value="${ME ? escapeHtml(ME.matricule) : ''}" placeholder="Votre matricule">
+      </label>
+      <label class="rap-field">
+        <span>Matricule de l'agent + Nom + Prénom <em>*</em></span>
+        <input class="gest-in" id="rapConcerne" placeholder="Ex. 59 Gianni Lampuza">
+      </label>
+      <label class="rap-field">
+        <span>Fait commis <em>*</em></span>
+        <textarea class="gest-in rap-area" id="rapFait" placeholder="Décrivez les faits…"></textarea>
+      </label>
+      <label class="rap-field">
+        <span>Note supplémentaire</span>
+        <textarea class="gest-in rap-area" id="rapNote" placeholder="Facultatif"></textarea>
+      </label>
+      <button class="btn btn-primary btn-sm" id="rapAddBtn">ENREGISTRER LE RAPPORT</button>
+    </div>
+
+    <div class="panel-head" style="margin-top:20px">
+      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">RAPPORTS</h2></div>
+      <span class="panel-count">${RAPPORTS.length}</span>
+    </div>
+    ${RAPPORTS.length ? `<div class="rap-grid">${cards}</div>`
+      : '<div class="empty-state"><div class="empty-title">AUCUN RAPPORT</div><div class="empty-sub">Rédigez-en un avec le formulaire ci-dessus.</div></div>'}`;
+
+  root.querySelector('#rapDateNow').addEventListener('click', () => { root.querySelector('#rapDate').value = todayFR(); });
+  root.querySelector('#rapAddBtn').addEventListener('click', () => {
+    rapportAdd({
+      date_rapport: root.querySelector('#rapDate').value.trim(),
+      agent_rapport: root.querySelector('#rapAgent').value.trim(),
+      concerne: root.querySelector('#rapConcerne').value.trim(),
+      fait: root.querySelector('#rapFait').value.trim(),
+      note: root.querySelector('#rapNote').value.trim(),
+    });
+  });
+  root.querySelectorAll('.rap-del').forEach((b) => b.addEventListener('click', () => {
+    if (confirm('Supprimer ce rapport ?')) rapportDelete(+b.dataset.id);
+  }));
+}
+
+async function reloadRapports() {
+  try { RAPPORTS = (await api('rapports')).rapports || []; } catch (e) {}
+}
+
+async function rapportAdd(p) {
+  if (!p.date_rapport || !p.agent_rapport || !p.concerne || !p.fait) {
+    alert('Merci de remplir les champs obligatoires (marqués *).');
+    return;
+  }
+  if (ME.demo) {
+    RAPPORTS.unshift({ id: Date.now(), auteur_matricule: ME.matricule, ...p });
+  } else {
+    try { await api('rapport_add', p); } catch (e) { alert(e.message); return; }
+    await reloadRapports();
+  }
+  renderRapports();
+  refreshStats('rapports');
+}
+
+async function rapportDelete(id) {
+  if (ME.demo) {
+    RAPPORTS = RAPPORTS.filter((x) => x.id !== id);
+  } else {
+    try { await api('rapport_delete', { id }); } catch (e) { alert(e.message); return; }
+    await reloadRapports();
+  }
+  renderRapports();
+  refreshStats('rapports');
+}
+
+// ── Page Absence ──
+const todayFR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
+const nowFRDateTime = () => `${todayFR()} ${String(new Date().getHours()).padStart(2, '0')}H`;
+
+async function loadAbsences() {
+  const root = document.getElementById('absRoot');
+  if (!root) return;
+  try {
+    if (!ME.demo) ABSENCES = (await api('absences')).absences || [];
+  } catch (e) {
+    root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`;
+    return;
+  }
+  renderAbsences();
+  refreshStats('absence');
+}
+
+function renderAbsences() {
+  const root = document.getElementById('absRoot');
+  if (!root) return;
+  const canDelAll = !!ME.peut_modifier_comptes;
+
+  const cards = ABSENCES.map((a) => {
+    const canDel = canDelAll || (ME && a.matricule === ME.matricule);
+    return `
+    <article class="abs-card${ME && a.matricule === ME.matricule ? ' mine' : ''}">
+      ${canDel ? `<button class="gest-del abs-del" data-id="${a.id}" title="Supprimer">✕</button>` : ''}
+      <div class="abs-line"><span>Matricule</span><b>${a.matricule || '—'}</b></div>
+      <div class="abs-line"><span>Nom/Prénom</span><b>${a.nom || '—'}</b></div>
+      <div class="abs-line"><span>Date de départ</span><b>${a.date_depart || '—'}</b></div>
+      <div class="abs-line"><span>Date de retour</span><b>${a.date_retour || '—'}</b></div>
+      <div class="abs-line"><span>Raison</span><b>${a.raison || '—'}</b></div>
+    </article>`;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Déclaration</span><h2 class="panel-title">POSER UNE ABSENCE</h2></div>
+    </div>
+    <div class="abs-form">
+      <div class="abs-you">Vous : <b>${ME ? `${ME.matricule} | ${ME.nom}` : '—'}</b></div>
+      <div class="abs-fields">
+        <div class="field-with-bolt">
+          <input class="gest-in" id="absDep" placeholder="Date de départ (ex. 04/08/2026 18H)">
+          <button class="bolt-btn" id="absDepNow" type="button" title="Mettre aujourd'hui">
+            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <div class="field-with-bolt">
+          <input class="gest-in" id="absRet" placeholder="Date de retour (ex. 28/08/2026)">
+          <button class="bolt-btn" id="absRetNow" type="button" title="Mettre aujourd'hui">
+            <svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <input class="gest-in" id="absRaison" placeholder="Raison (ex. vacances)">
+        <button class="btn btn-primary btn-sm" id="absAddBtn">DÉCLARER</button>
+      </div>
+    </div>
+
+    <div class="panel-head" style="margin-top:20px">
+      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">ABSENCES</h2></div>
+      <span class="panel-count">${ABSENCES.length}</span>
+    </div>
+    ${ABSENCES.length ? `<div class="abs-grid">${cards}</div>`
+      : '<div class="empty-state"><div class="empty-title">AUCUNE ABSENCE</div><div class="empty-sub">Déclarez la vôtre avec le formulaire ci-dessus.</div></div>'}`;
+
+  root.querySelector('#absDepNow').addEventListener('click', () => { root.querySelector('#absDep').value = nowFRDateTime(); });
+  root.querySelector('#absRetNow').addEventListener('click', () => { root.querySelector('#absRet').value = todayFR(); });
+
+  root.querySelector('#absAddBtn').addEventListener('click', () => {
+    absenceAdd({
+      date_depart: root.querySelector('#absDep').value.trim(),
+      date_retour: root.querySelector('#absRet').value.trim(),
+      raison: root.querySelector('#absRaison').value.trim(),
+    });
+  });
+  root.querySelectorAll('.abs-del').forEach((b) => b.addEventListener('click', () => {
+    if (confirm('Supprimer cette absence ?')) absenceDelete(+b.dataset.id);
+  }));
+}
+
+async function reloadAbsences() {
+  try { ABSENCES = (await api('absences')).absences || []; } catch (e) {}
+}
+
+async function absenceAdd(p) {
+  if (!p.date_depart || !p.date_retour) { alert('Indiquez la date de départ et de retour.'); return; }
+  if (ME.demo) {
+    ABSENCES.unshift({ id: Date.now(), matricule: ME.matricule, nom: ME.nom, ...p });
+  } else {
+    try { await api('absence_add', p); } catch (e) { alert(e.message); return; }
+    await reloadAbsences();
+  }
+  renderAbsences();
+  refreshStats('absence');
+}
+
+async function absenceDelete(id) {
+  if (ME.demo) {
+    ABSENCES = ABSENCES.filter((x) => x.id !== id);
+  } else {
+    try { await api('absence_delete', { id }); } catch (e) { alert(e.message); return; }
+    await reloadAbsences();
+  }
+  renderAbsences();
+  refreshStats('absence');
 }
 
 // ── Page Patrouilles ──
