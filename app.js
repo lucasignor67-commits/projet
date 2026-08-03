@@ -36,6 +36,11 @@ const DEMO_POSTS_KEY = 'milicia.posts';
 const memberName = (mat) => { const e = PAGES.effectifs.data.find((x) => x.matricule === mat); return e ? e.nom : mat; };
 const occupantsAt = (nom) => Object.keys(PRESENCE).filter((mat) => PRESENCE[mat] === nom);
 
+// Catégories de formations : clés internes (air/veh/mer) ↔ base (fuerza/ejercito/marina)
+const CAT_DB_TO_UI = { fuerza: 'air', ejercito: 'veh', marina: 'mer' };
+const CAT_UI_TO_DB = { air: 'fuerza', veh: 'ejercito', mer: 'marina' };
+const CAT_OPTS = [['fuerza', 'Fuerza'], ['ejercito', 'Ejército'], ['marina', 'Marina']];
+
 // Recharge la présence (serveur ou démo) puis rafraîchit la carte si affichée
 async function loadPresence() {
   if (ME && ME.demo) {
@@ -201,30 +206,17 @@ const PAGES = {
 
   patrouilles: {
     title: 'PATROUILLES',
-    desc: "Planification et suivi des patrouilles sur l'île.",
-    kicker: 'Surveillance',
-    listTitle: 'REGISTRE DES PATROUILLES',
-    addLabel: 'NOUVELLE PATROUILLE',
-    columns: [
-      { key: 'num', label: 'N°' },
-      { key: 'zone', label: 'Zone' },
-      { key: 'equipe', label: 'Équipe' },
-      { key: 'vehicule', label: 'Véhicule' },
-      { key: 'horaire', label: 'Horaire' },
-      { key: 'statut', label: 'Statut', badge: true, align: 'right' },
-    ],
+    desc: 'Créer et suivre les patrouilles en cours et terminées.',
+    view: 'custom',
+    get data() { return PATROUILLES; },
     stats: (rows) => [
       ['Total', rows.length],
-      ['En cours', countBy(rows, 'statut', 'EN COURS')],
-      ['Planifiées', countBy(rows, 'statut', 'PLANIFIÉE')],
-      ['Terminées', countBy(rows, 'statut', 'TERMINÉE')],
+      ['En cours', rows.filter((r) => r.statut === 'EN COURS').length],
+      ['Terminées', rows.filter((r) => r.statut === 'TERMINÉE').length],
+      ['Fixes', rows.filter((r) => r.type === 'fixe').length],
     ],
-    data: [
-      { num: 'P-09', zone: 'Tour radio', equipe: 'Salazar / Mendoza', vehicule: 'Winky', horaire: '08:00 – 11:00', statut: 'PLANIFIÉE' },
-      { num: 'P-08', zone: 'Plage nord', equipe: 'Vargas / Salazar', vehicule: 'Squaddie', horaire: '20:00 – 23:00', statut: 'EN COURS' },
-      { num: 'P-07', zone: 'Aérodrome', equipe: 'Fuentes / Reyes', vehicule: 'Vetir', horaire: '14:00 – 17:00', statut: 'TERMINÉE' },
-      { num: 'P-06', zone: 'Port principal', equipe: 'Herrera / Mendoza', vehicule: 'Dinghy', horaire: '09:00 – 12:00', statut: 'TERMINÉE' },
-    ],
+    render: () => `<div id="patRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadPatrouilles(),
   },
 
   operations: {
@@ -936,6 +928,89 @@ const PAGES = {
     render: () => `<div id="gestionRoot" class="gestion-root">Chargement…</div>`,
     afterRender: () => loadGestion(),
   },
+
+  /* ─────────── GESTION DES FORMATIONS (réservé) ─────────── */
+  gestion_formations: {
+    title: 'GESTION DES FORMATIONS',
+    desc: 'Ajouter, modifier ou retirer les formations (colonnes de la matrice).',
+    view: 'custom',
+    get data() { return FORMS; },
+    stats: (rows) => [
+      ['Formations', rows.length],
+      ['Fuerza', rows.filter((r) => r.categorie === 'fuerza').length],
+      ['Ejército', rows.filter((r) => r.categorie === 'ejercito').length],
+      ['Marina', rows.filter((r) => r.categorie === 'marina').length],
+    ],
+    render: () => `<div id="gestFormRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadGestionFormations(),
+  },
+
+  /* ─────────── DEBRIEF SOLDAT (formateurs) ─────────── */
+  debrief: {
+    title: 'DEBRIEF SOLDAT',
+    desc: 'Mise à jour des formations des miliciens — cliquez une case pour cocher / décocher.',
+    view: 'custom',
+    get data() { return PAGES.formation.data; },
+    stats: (rows) => {
+      const total = rows.reduce((s, m) => s + m.forms.length, 0);
+      return [
+        ['Membres', rows.length],
+        ['Formations', PAGES.formation.formations.length],
+        ['Certifications', total],
+        ['Moyenne / membre', rows.length ? (total / rows.length).toFixed(1) : '0'],
+      ];
+    },
+    render: function (cfg) {
+      const formations = PAGES.formation.formations;
+      const members = cfg.data;
+      const catLabel = { air: 'FUERZA', veh: 'EJÉRCITO', mer: 'MARINA' };
+      const cats = ['air', 'veh', 'mer'];
+      const check = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+      const groupHead = cats.map((c) => {
+        const span = formations.filter((f) => f.cat === c).length;
+        return span ? `<th class="grp cat-${c}" colspan="${span}">${catLabel[c]}</th>` : '';
+      }).join('');
+      const formHead = formations.map((f) => `<th class="fcol cat-${f.cat}"><span>${f.nom}</span></th>`).join('');
+      const body = members.map((m) => {
+        const cells = formations.map((f) => {
+          const has = m.forms.includes(f.nom);
+          return `<td class="cell editable${has ? ' on cat-' + f.cat : ''}" data-mat="${m.mat}" data-form="${f.nom.replace(/"/g, '&quot;')}" data-has="${has ? 1 : 0}">${has ? check : '·'}</td>`;
+        }).join('');
+        return `<tr>
+          <td class="mrow"><span class="mmat">${m.mat}</span><span class="mname">${m.nom}</span></td>
+          <td class="mcount">${m.forms.length}</td>${cells}</tr>`;
+      }).join('');
+
+      return `
+        <div class="panel-head">
+          <div><span class="panel-kicker">Formateur</span><h2 class="panel-title">MISE À JOUR DES FORMATIONS</h2></div>
+          <span class="panel-count">Cliquez une case pour cocher / décocher</span>
+        </div>
+        <div class="matrix-legend">
+          <span class="lg cat-air">Fuerza</span>
+          <span class="lg cat-veh">Ejército</span>
+          <span class="lg cat-mer">Marina</span>
+        </div>
+        <div class="table-wrap matrix-wrap">
+          <table class="matrix">
+            <thead>
+              <tr><th class="mrow" rowspan="2">Matricule</th><th class="mcount" rowspan="2">Nb</th>${groupHead}</tr>
+              <tr>${formHead}</tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>`;
+    },
+    afterRender: function () {
+      const host = document.getElementById('customSection');
+      host.querySelectorAll('.cell.editable').forEach((td) => {
+        td.addEventListener('click', () => {
+          certifToggle(td.dataset.mat, td.dataset.form, td.dataset.has !== '1');
+        });
+      });
+    },
+  },
 };
 
 // Ordre d'affichage sur la grille d'accueil
@@ -950,7 +1025,10 @@ let currentPage = 'accueil';
 // ── État d'authentification / données serveur ──
 let ME = null;        // compte connecté + permissions
 let GRADES = [];      // liste des grades (menus déroulants)
-let ACCOUNTS = [];    // comptes (page Gestion)
+let ACCOUNTS = [];    // comptes (page Gestion des comptes)
+let FORMS = [];       // formations (page Gestion des formations)
+let GEST_SORT = 'grade'; // tri de la page Gestion des comptes : grade | matricule | recent
+let PATROUILLES = [];    // patrouilles (page Patrouilles)
 
 // ── Éléments DOM ──
 const sidebar = document.getElementById('sidebar');
@@ -1210,6 +1288,9 @@ async function afterLogin() {
       PAGES.effectifs.data = eff.map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut }));
       const fm = await api('formations');
       if (fm.certifs) PAGES.formation.certifs = fm.certifs;
+      if (fm.formations && fm.formations.length) {
+        PAGES.formation.formations = fm.formations.map((f) => ({ nom: f.nom, cat: CAT_DB_TO_UI[f.categorie] || 'veh' }));
+      }
       GRADES = (await api('grades')).grades || DEMO_GRADES;
     } catch (e) {
       console.warn('Chargement des données:', e.message);
@@ -1221,7 +1302,11 @@ async function afterLogin() {
 
   // Section réservée visible selon les droits
   const canAdmin = ME.peut_ajouter_effectif || ME.peut_modifier_comptes || ME.peut_voir_mdp;
+  const canFormateur = ME.formateur || canAdmin;
   document.querySelectorAll('.nav-admin').forEach((el) => { el.hidden = !canAdmin; });
+  document.querySelectorAll('.nav-formateur').forEach((el) => { el.hidden = !canFormateur; });
+  const divider = document.querySelector('.nav-divider.nav-reserved');
+  if (divider) divider.hidden = !(canFormateur || canAdmin);
 
   buildHomeGrid();
   updateHomeStats();
@@ -1275,6 +1360,20 @@ function gradeOptions(selectedId) {
   return GRADES.map((g) => `<option value="${g.id}"${Number(g.id) === Number(selectedId) ? ' selected' : ''}>${g.nom}</option>`).join('');
 }
 
+// Trie une copie des comptes selon GEST_SORT
+function sortAccounts(list) {
+  const arr = [...list];
+  const niveauOf = (id) => (GRADES.find((g) => Number(g.id) === Number(id)) || {}).niveau || 0;
+  if (GEST_SORT === 'matricule') {
+    arr.sort((a, b) => Number(a.matricule) - Number(b.matricule));
+  } else if (GEST_SORT === 'recent') {
+    arr.sort((a, b) => String(b.date_creation || '').localeCompare(String(a.date_creation || '')) || Number(b.matricule) - Number(a.matricule));
+  } else { // grade (du plus haut au plus bas, puis matricule)
+    arr.sort((a, b) => niveauOf(b.grade_id) - niveauOf(a.grade_id) || Number(a.matricule) - Number(b.matricule));
+  }
+  return arr;
+}
+
 function renderGestion() {
   const root = document.getElementById('gestionRoot');
   const canAdd = !!ME.peut_ajouter_effectif;
@@ -1292,7 +1391,8 @@ function renderGestion() {
       <button class="btn btn-primary btn-sm" id="addBtn">AJOUTER</button>
     </div>` : '';
 
-  const rows = ACCOUNTS.map((a) => `
+  const sortOpts = [['grade', 'Grade'], ['matricule', 'Matricule'], ['recent', 'Dernier inscrit']];
+  const rows = sortAccounts(ACCOUNTS).map((a) => `
     <tr data-mat="${a.matricule}">
       <td class="gest-mat">${a.matricule}</td>
       <td><input class="gest-in gest-nom" value="${(a.nom || '').replace(/"/g, '&quot;')}" ${dis}></td>
@@ -1302,6 +1402,12 @@ function renderGestion() {
         <option${a.statut === 'EN TEST' ? ' selected' : ''}>EN TEST</option>
       </select></td>
       ${canPwd ? `<td><input class="gest-in gest-pwd" value="${(a.mot_de_passe || '').replace(/"/g, '&quot;')}" ${dis}></td>` : ''}
+      <td style="text-align:center">
+        <label class="switch" title="Peut accéder à Debrief soldat">
+          <input type="checkbox" class="gest-formateur" ${a.formateur ? 'checked' : ''} ${dis}>
+          <span class="switch-slider"></span>
+        </label>
+      </td>
       <td class="gest-actions">
         ${canEdit ? `<button class="btn btn-ghost btn-sm gest-save">Enregistrer</button>
         <button class="gest-del" title="Supprimer">✕</button>` : '<span class="gest-ro">lecture seule</span>'}
@@ -1314,17 +1420,30 @@ function renderGestion() {
         <span class="panel-kicker">Administration</span>
         <h2 class="panel-title">COMPTES</h2>
       </div>
-      <span class="panel-count">${ACCOUNTS.length} COMPTES</span>
+      <div class="gest-tools">
+        <label class="gest-sort">Trier par
+          <select id="gestSort">
+            ${sortOpts.map(([v, l]) => `<option value="${v}"${v === GEST_SORT ? ' selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </label>
+        <span class="panel-count">${ACCOUNTS.length} COMPTES</span>
+      </div>
     </div>
     ${addRow}
     <div class="table-wrap">
       <table class="data-table gest-table">
         <thead><tr>
-          <th>N°</th><th>Nom</th><th>Grade</th><th>Statut</th>${canPwd ? '<th>Mot de passe</th>' : ''}<th class="th-right">Actions</th>
+          <th>N°</th><th>Nom</th><th>Grade</th><th>Statut</th>${canPwd ? '<th>Mot de passe</th>' : ''}<th>Formateur</th><th class="th-right">Actions</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+
+  // Tri
+  root.querySelector('#gestSort')?.addEventListener('change', (e) => {
+    GEST_SORT = e.target.value;
+    renderGestion();
+  });
 
   // Ajout
   root.querySelector('#addBtn')?.addEventListener('click', async () => {
@@ -1349,6 +1468,7 @@ function renderGestion() {
         grade_id: +tr.querySelector('.gest-grade').value,
         statut: tr.querySelector('.gest-statut').value,
         mot_de_passe: tr.querySelector('.gest-pwd') ? tr.querySelector('.gest-pwd').value : undefined,
+        formateur: tr.querySelector('.gest-formateur') ? tr.querySelector('.gest-formateur').checked : undefined,
       });
     });
     tr.querySelector('.gest-del')?.addEventListener('click', async () => {
@@ -1393,6 +1513,260 @@ async function accountDelete(mat) {
   }
   updateHomeStats();
   await loadGestion();
+}
+
+// ── Page Patrouilles ──
+const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const PAT_TYPES = [['aerienne', 'Aérienne'], ['terrestre', 'Terrestre'], ['marine', 'Marine'], ['fixe', 'Fixe']];
+const PAT_TYPE_LABEL = { aerienne: 'Aérienne', terrestre: 'Terrestre', marine: 'Marine', fixe: 'Fixe' };
+
+async function loadPatrouilles() {
+  const root = document.getElementById('patRoot');
+  if (!root) return;
+  try {
+    if (!ME.demo) PATROUILLES = (await api('patrouilles')).patrouilles || [];
+  } catch (e) {
+    root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`;
+    return;
+  }
+  renderPatrouilles();
+  refreshStats('patrouilles');
+}
+
+function renderPatrouilles() {
+  const root = document.getElementById('patRoot');
+  if (!root) return;
+
+  const rows = PATROUILLES.map((p) => `
+    <tr>
+      <td>${PAT_TYPE_LABEL[p.type] || p.type}</td>
+      <td>${p.type === 'fixe' ? (p.lieu || '—') : '—'}</td>
+      <td>${p.matricules || '—'}</td>
+      <td>${p.vehicule || '—'}</td>
+      <td>${p.fin ? `${p.debut || '—'} – ${p.fin}` : `${p.debut || '—'} – …`}</td>
+      <td>${badge(p.statut)}</td>
+      <td class="gest-actions">
+        ${p.statut === 'EN COURS' ? `<button class="btn btn-primary btn-sm pat-finish" data-id="${p.id}">TERMINER</button>` : ''}
+        <button class="gest-del pat-del" data-id="${p.id}" title="Supprimer">✕</button>
+      </td>
+    </tr>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Surveillance</span><h2 class="panel-title">NOUVELLE PATROUILLE</h2></div>
+    </div>
+    <div class="pat-form">
+      <select class="gest-in" id="patType">${PAT_TYPES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+      <input class="gest-in" id="patLieu" placeholder="Lieu (patrouille fixe)" hidden>
+      <input class="gest-in" id="patMat" placeholder="Matricule(s)">
+      <input class="gest-in" id="patVeh" placeholder="Véhicule">
+      <button class="btn btn-primary btn-sm" id="patStart">DÉMARRER</button>
+    </div>
+
+    <div class="panel-head" style="margin-top:20px">
+      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">PATROUILLES</h2></div>
+      <span class="panel-count">${PATROUILLES.length}</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Type</th><th>Lieu</th><th>Matricule</th><th>Véhicule</th><th>Horaire</th><th>Statut</th><th class="th-right">Action</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${PATROUILLES.length === 0 ? '<div class="empty-state"><div class="empty-title">AUCUNE PATROUILLE</div><div class="empty-sub">Créez-en une avec le formulaire ci-dessus.</div></div>' : ''}
+    </div>`;
+
+  // Champ « Lieu » visible seulement pour une patrouille fixe
+  const typeSel = root.querySelector('#patType');
+  const lieuInput = root.querySelector('#patLieu');
+  const syncLieu = () => { lieuInput.hidden = typeSel.value !== 'fixe'; };
+  typeSel.addEventListener('change', syncLieu);
+  syncLieu();
+
+  root.querySelector('#patStart').addEventListener('click', () => {
+    const type = typeSel.value;
+    patrouilleAdd({
+      type,
+      lieu: type === 'fixe' ? lieuInput.value.trim() : '',
+      matricules: root.querySelector('#patMat').value.trim(),
+      vehicule: root.querySelector('#patVeh').value.trim(),
+      debut: nowHM(),
+    });
+  });
+
+  root.querySelectorAll('.pat-finish').forEach((b) => b.addEventListener('click', () => patrouilleFinish(+b.dataset.id)));
+  root.querySelectorAll('.pat-del').forEach((b) => b.addEventListener('click', () => {
+    if (confirm('Supprimer cette patrouille ?')) patrouilleDelete(+b.dataset.id);
+  }));
+}
+
+async function reloadPatrouilles() {
+  try { PATROUILLES = (await api('patrouilles')).patrouilles || []; } catch (e) {}
+}
+
+async function patrouilleAdd(p) {
+  if (!p.matricules) { alert('Indiquez au moins un matricule.'); return; }
+  if (ME.demo) {
+    PATROUILLES.unshift({ id: Date.now(), ...p, fin: '', statut: 'EN COURS' });
+  } else {
+    try { await api('patrouille_add', p); } catch (e) { alert(e.message); return; }
+    await reloadPatrouilles();
+  }
+  renderPatrouilles();
+  refreshStats('patrouilles');
+}
+
+async function patrouilleFinish(id) {
+  const fin = nowHM();
+  if (ME.demo) {
+    const p = PATROUILLES.find((x) => x.id === id);
+    if (p) { p.fin = fin; p.statut = 'TERMINÉE'; }
+  } else {
+    try { await api('patrouille_finish', { id, fin }); } catch (e) { alert(e.message); return; }
+    await reloadPatrouilles();
+  }
+  renderPatrouilles();
+  refreshStats('patrouilles');
+}
+
+async function patrouilleDelete(id) {
+  if (ME.demo) {
+    PATROUILLES = PATROUILLES.filter((x) => x.id !== id);
+  } else {
+    try { await api('patrouille_delete', { id }); } catch (e) { alert(e.message); return; }
+    await reloadPatrouilles();
+  }
+  renderPatrouilles();
+  refreshStats('patrouilles');
+}
+
+// ── Debrief soldat : cocher / décocher une certification ──
+async function certifToggle(mat, formation, has) {
+  if (ME.demo) {
+    PAGES.formation.certifs[mat] = PAGES.formation.certifs[mat] || [];
+    const arr = PAGES.formation.certifs[mat];
+    if (has) { if (!arr.includes(formation)) arr.push(formation); }
+    else { const i = arr.indexOf(formation); if (i >= 0) arr.splice(i, 1); }
+  } else {
+    try { await api('certif_set', { matricule: mat, formation, has }); }
+    catch (e) { alert(e.message); return; }
+    try { const fm = await api('formations'); if (fm.certifs) PAGES.formation.certifs = fm.certifs; } catch (e) {}
+  }
+  // Re-render la matrice si on est sur Debrief
+  if (currentPage === 'debrief') {
+    const cfg = PAGES.debrief;
+    const host = document.getElementById('customSection');
+    host.innerHTML = cfg.render(cfg);
+    cfg.afterRender(cfg);
+    refreshStats('debrief');
+  }
+}
+
+// ── Page Gestion des formations ──
+async function loadGestionFormations() {
+  const root = document.getElementById('gestFormRoot');
+  if (!root) return;
+  try {
+    if (ME.demo) {
+      FORMS = PAGES.formation.formations.map((f, i) => ({ id: i + 1, nom: f.nom, categorie: CAT_UI_TO_DB[f.cat] || 'ejercito' }));
+    } else {
+      FORMS = ((await api('formations')).formations || []).map((f) => ({ id: f.id, nom: f.nom, categorie: f.categorie }));
+    }
+  } catch (e) {
+    root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`;
+    return;
+  }
+  renderGestionFormations();
+  refreshStats('gestion_formations');
+}
+
+function catOptions(selected) {
+  return CAT_OPTS.map(([v, l]) => `<option value="${v}"${v === selected ? ' selected' : ''}>${l}</option>`).join('');
+}
+
+function renderGestionFormations() {
+  const root = document.getElementById('gestFormRoot');
+  const rows = FORMS.map((f) => `
+    <tr data-id="${f.id}">
+      <td><input class="gest-in gf-nom" value="${(f.nom || '').replace(/"/g, '&quot;')}"></td>
+      <td><select class="gest-in gf-cat">${catOptions(f.categorie)}</select></td>
+      <td class="gest-actions">
+        <button class="btn btn-ghost btn-sm gf-save">Enregistrer</button>
+        <button class="gest-del gf-del" title="Supprimer">✕</button>
+      </td>
+    </tr>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Administration</span><h2 class="panel-title">FORMATIONS</h2></div>
+      <span class="panel-count">${FORMS.length} FORMATIONS</span>
+    </div>
+    <div class="gest-add">
+      <input class="gest-in" id="gfAddNom" placeholder="Nom de la nouvelle formation">
+      <select class="gest-in" id="gfAddCat">${catOptions('ejercito')}</select>
+      <button class="btn btn-primary btn-sm" id="gfAddBtn">AJOUTER</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Formation</th><th>Catégorie</th><th class="th-right">Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  root.querySelector('#gfAddBtn').addEventListener('click', () => formationAdd({
+    nom: root.querySelector('#gfAddNom').value.trim(),
+    categorie: root.querySelector('#gfAddCat').value,
+  }));
+  root.querySelectorAll('tr[data-id]').forEach((tr) => {
+    const id = +tr.dataset.id;
+    tr.querySelector('.gf-save').addEventListener('click', () => formationUpdate({
+      id, nom: tr.querySelector('.gf-nom').value.trim(), categorie: tr.querySelector('.gf-cat').value,
+    }));
+    tr.querySelector('.gf-del').addEventListener('click', () => {
+      if (confirm('Supprimer cette formation ? (les certifications liées seront retirées)')) formationDelete(id);
+    });
+  });
+}
+
+// Recharge les colonnes de la matrice après un changement
+async function reloadFormationColumns() {
+  if (ME.demo) return;
+  try {
+    const fm = await api('formations');
+    if (fm.formations) PAGES.formation.formations = fm.formations.map((f) => ({ nom: f.nom, cat: CAT_DB_TO_UI[f.categorie] || 'veh' }));
+  } catch (e) {}
+}
+
+async function formationAdd(p) {
+  if (!p.nom) { alert('Nom de la formation obligatoire.'); return; }
+  if (ME.demo) {
+    PAGES.formation.formations.push({ nom: p.nom, cat: CAT_DB_TO_UI[p.categorie] || 'veh' });
+  } else {
+    try { await api('formation_add', p); } catch (e) { alert(e.message); return; }
+    await reloadFormationColumns();
+  }
+  await loadGestionFormations();
+}
+
+async function formationUpdate(p) {
+  if (!p.nom) { alert('Nom de la formation obligatoire.'); return; }
+  if (ME.demo) {
+    const f = PAGES.formation.formations[p.id - 1];
+    if (f) { f.nom = p.nom; f.cat = CAT_DB_TO_UI[p.categorie] || 'veh'; }
+  } else {
+    try { await api('formation_update', p); } catch (e) { alert(e.message); return; }
+    await reloadFormationColumns();
+  }
+  await loadGestionFormations();
+}
+
+async function formationDelete(id) {
+  if (ME.demo) {
+    PAGES.formation.formations.splice(id - 1, 1);
+  } else {
+    try { await api('formation_delete', { id }); } catch (e) { alert(e.message); return; }
+    await reloadFormationColumns();
+  }
+  await loadGestionFormations();
 }
 
 // ── Init ──

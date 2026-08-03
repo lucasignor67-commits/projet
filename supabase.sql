@@ -4,7 +4,7 @@
 -- ════════════════════════════════════════════════════════════════
 
 DROP VIEW  IF EXISTS v_presence, v_comptes_admin, v_comptes_perms, v_effectifs;
-DROP TABLE IF EXISTS journal_comptes, presence, postes,
+DROP TABLE IF EXISTS journal_comptes, presence, postes, patrouilles,
                      compte_formations, formations, comptes, grades CASCADE;
 
 -- ── 1. GRADES + permissions ─────────────────────────────────────
@@ -46,6 +46,7 @@ CREATE TABLE comptes (
   grade_id      INT NOT NULL REFERENCES grades(id),
   statut        VARCHAR(12) NOT NULL DEFAULT 'TITULAIRE' CHECK (statut IN ('TITULAIRE','EN TEST')),
   actif         BOOLEAN NOT NULL DEFAULT true,
+  formateur     BOOLEAN NOT NULL DEFAULT false,
   date_creation TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_maj      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -187,6 +188,20 @@ CREATE TABLE presence (
 ALTER PUBLICATION supabase_realtime ADD TABLE presence;
 GRANT SELECT ON presence TO anon;
 
+-- ── 4b. PATROUILLES ─────────────────────────────────────────────
+CREATE TABLE patrouilles (
+  id               SERIAL PRIMARY KEY,
+  type             VARCHAR(12) NOT NULL CHECK (type IN ('aerienne','terrestre','marine','fixe')),
+  lieu             VARCHAR(80),
+  matricules       VARCHAR(120),
+  vehicule         VARCHAR(80),
+  debut            VARCHAR(20),
+  fin              VARCHAR(20),
+  statut           VARCHAR(12) NOT NULL DEFAULT 'EN COURS' CHECK (statut IN ('EN COURS','TERMINÉE')),
+  auteur_matricule VARCHAR(6),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
 -- ── 5. JOURNAL ──────────────────────────────────────────────────
 CREATE TABLE journal_comptes (
   id               SERIAL PRIMARY KEY,
@@ -205,15 +220,19 @@ ORDER BY g.niveau DESC, c.matricule;
 
 CREATE VIEW v_comptes_perms AS
 SELECT c.matricule, c.nom, c.statut, g.nom AS grade, g.section, g.niveau,
-       g.peut_ajouter_effectif, g.peut_modifier_comptes, g.peut_voir_mdp, g.peut_gerer_grades
+       g.peut_ajouter_effectif, g.peut_modifier_comptes, g.peut_voir_mdp, g.peut_gerer_grades,
+       c.formateur
 FROM comptes c JOIN grades g ON g.id = c.grade_id
 WHERE c.actif = true;
 
 CREATE VIEW v_comptes_admin AS
-SELECT c.matricule, c.nom, c.mot_de_passe, c.grade_id, g.nom AS grade, c.statut, c.actif,
+SELECT c.matricule, c.nom, c.mot_de_passe, c.grade_id, g.nom AS grade, c.statut, c.actif, c.formateur,
        c.date_creation, c.date_maj
 FROM comptes c JOIN grades g ON g.id = c.grade_id
 ORDER BY g.niveau DESC, c.matricule;
+
+-- Exemples de formateurs (à ajuster ensuite via Gestion des comptes)
+UPDATE comptes SET formateur = true WHERE matricule IN ('15','16','43');
 
 -- ════════════════════════════════════════════════════════════════
 --  IMPORTANT SÉCURITÉ (Supabase / RLS)
