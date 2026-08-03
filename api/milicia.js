@@ -182,6 +182,114 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Sanctions (encodage réservé Commandement / Direction) ──
+      case 'sanctions': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('sanctions').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ sanctions: data });
+      }
+
+      case 'sanction_add': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Seuls le Commandement et la Direction peuvent sanctionner', 403);
+        const TYPES = ['AVERTISSEMENT', 'BLÂME', 'RÉTROGRADATION', 'EXCLUSION'];
+        const row = {
+          membre: String(body.membre || '').trim() || null,
+          type: TYPES.includes(body.type) ? body.type : 'AVERTISSEMENT',
+          motif: String(body.motif || '').trim() || null,
+          date_sanction: String(body.date_sanction || '').trim() || null,
+          prononcee_par: me.nom,
+          auteur_matricule: me.matricule,
+        };
+        if (!row.membre || !row.motif || !row.date_sanction) return fail('Champs obligatoires manquants');
+        const { error } = await sb().from('sanctions').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'sanction_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Seuls le Commandement et la Direction peuvent supprimer une sanction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('sanctions').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Rapports ──
+      case 'rapports': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('rapports').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ rapports: data });
+      }
+
+      case 'rapport_add': {
+        if (!me) return fail('Non authentifié', 401);
+        const row = {
+          date_rapport: String(body.date_rapport || '').trim() || null,
+          agent_rapport: String(body.agent_rapport || '').trim() || null,
+          concerne: String(body.concerne || '').trim() || null,
+          fait: String(body.fait || '').trim() || null,
+          note: String(body.note || '').trim() || null,
+          auteur_matricule: me.matricule,
+        };
+        if (!row.date_rapport || !row.agent_rapport || !row.concerne || !row.fait) return fail('Champs obligatoires manquants');
+        const { error } = await sb().from('rapports').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'rapport_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        if (me.section !== 'comando' && me.section !== 'direction') {
+          return fail('Seuls le Commandement et la Direction peuvent supprimer un rapport', 403);
+        }
+        const { error } = await sb().from('rapports').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Absences ──
+      case 'absences': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('absences').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ absences: data });
+      }
+
+      case 'absence_add': {
+        if (!me) return fail('Non authentifié', 401);
+        const row = {
+          matricule: me.matricule,
+          nom: me.nom,
+          date_depart: String(body.date_depart || '').trim() || null,
+          date_retour: String(body.date_retour || '').trim() || null,
+          raison: String(body.raison || '').trim() || null,
+        };
+        if (!row.date_depart || !row.date_retour) return fail('Dates manquantes');
+        const { error } = await sb().from('absences').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'absence_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        // On récupère l'absence pour vérifier le droit (auteur ou admin)
+        const { data: abs } = await sb().from('absences').select('matricule').eq('id', id).maybeSingle();
+        if (!abs) return fail('Absence introuvable', 404);
+        if (abs.matricule !== me.matricule && !me.peut_modifier_comptes) return fail('Vous ne pouvez supprimer que votre absence', 403);
+        const { error } = await sb().from('absences').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Patrouilles ──
       case 'patrouilles': {
         if (!me) return fail('Non authentifié', 401);
