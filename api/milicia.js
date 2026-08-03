@@ -113,7 +113,7 @@ export default async function handler(req, res) {
 
       case 'formations': {
         if (!me) return fail('Non authentifié', 401);
-        const { data: forms } = await sb().from('formations').select('nom,categorie').order('ordre');
+        const { data: forms } = await sb().from('formations').select('id,nom,categorie,ordre').order('ordre');
         const { data: links } = await sb().from('compte_formations').select('compte_matricule, formations(nom)');
         const certifs = {};
         (links || []).forEach((l) => {
@@ -163,6 +163,7 @@ export default async function handler(req, res) {
         if (!mat || !nom || !grade_id) return fail('Champs manquants');
         const patch = { nom, grade_id, statut };
         if (body.mot_de_passe) patch.mot_de_passe = String(body.mot_de_passe);
+        if (typeof body.formateur !== 'undefined') patch.formateur = !!body.formateur;
         const { error } = await sb().from('comptes').update(patch).eq('matricule', mat);
         if (error) return fail(error.message);
         await sb().from('journal_comptes').insert({ cible_matricule: mat, auteur_matricule: me.matricule, action: 'MODIFICATION', details: 'Modification de ' + nom });
@@ -178,6 +179,107 @@ export default async function handler(req, res) {
         const { error } = await sb().from('comptes').delete().eq('matricule', mat);
         if (error) return fail(error.message);
         await sb().from('journal_comptes').insert({ cible_matricule: mat, auteur_matricule: me.matricule, action: 'SUPPRESSION' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Patrouilles ──
+      case 'patrouilles': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('patrouilles').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ patrouilles: data });
+      }
+
+      case 'patrouille_add': {
+        if (!me) return fail('Non authentifié', 401);
+        const type = ['aerienne', 'terrestre', 'marine', 'fixe'].includes(body.type) ? body.type : 'terrestre';
+        const row = {
+          type,
+          lieu: String(body.lieu || '').trim() || null,
+          matricules: String(body.matricules || '').trim() || null,
+          vehicule: String(body.vehicule || '').trim() || null,
+          debut: String(body.debut || '').trim() || null,
+          statut: 'EN COURS',
+          auteur_matricule: me.matricule,
+        };
+        const { error } = await sb().from('patrouilles').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'patrouille_finish': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        const fin = String(body.fin || '').trim();
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('patrouilles').update({ fin, statut: 'TERMINÉE' }).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'patrouille_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('patrouilles').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Debrief soldat : cocher / décocher une certification (formateur) ──
+      case 'certif_set': {
+        if (!me) return fail('Non authentifié', 401);
+        if (!me.formateur && !me.peut_modifier_comptes) return fail('Réservé aux formateurs', 403);
+        const mat = String(body.matricule || '').trim();
+        const formationNom = String(body.formation || '').trim();
+        const has = !!body.has;
+        if (!mat || !formationNom) return fail('Champs manquants');
+        const { data: f } = await sb().from('formations').select('id').eq('nom', formationNom).maybeSingle();
+        if (!f) return fail('Formation inconnue');
+        if (has) {
+          const { error } = await sb().from('compte_formations')
+            .upsert({ compte_matricule: mat, formation_id: f.id }, { onConflict: 'compte_matricule,formation_id' });
+          if (error) return fail(error.message);
+        } else {
+          const { error } = await sb().from('compte_formations')
+            .delete().eq('compte_matricule', mat).eq('formation_id', f.id);
+          if (error) return fail(error.message);
+        }
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Gestion des formations (catalogue = colonnes de la matrice) ──
+      case 'formation_add': {
+        if (!me) return fail('Non authentifié', 401);
+        if (!me.peut_modifier_comptes) return fail('Accès refusé', 403);
+        const nom = String(body.nom || '').trim();
+        const categorie = ['fuerza', 'ejercito', 'marina'].includes(body.categorie) ? body.categorie : 'ejercito';
+        const ordre = Number(body.ordre || 99);
+        if (!nom) return fail('Nom manquant');
+        const { error } = await sb().from('formations').insert({ nom, categorie, ordre });
+        if (error) return fail(error.code === '23505' ? 'Cette formation existe déjà' : error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'formation_update': {
+        if (!me) return fail('Non authentifié', 401);
+        if (!me.peut_modifier_comptes) return fail('Accès refusé', 403);
+        const id = Number(body.id || 0);
+        const nom = String(body.nom || '').trim();
+        const categorie = ['fuerza', 'ejercito', 'marina'].includes(body.categorie) ? body.categorie : 'ejercito';
+        if (!id || !nom) return fail('Champs manquants');
+        const { error } = await sb().from('formations').update({ nom, categorie }).eq('id', id);
+        if (error) return fail(error.code === '23505' ? 'Ce nom existe déjà' : error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'formation_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        if (!me.peut_modifier_comptes) return fail('Accès refusé', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('formations').delete().eq('id', id);
+        if (error) return fail(error.message);
         return res.status(200).json({ ok: true });
       }
 
