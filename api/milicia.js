@@ -182,6 +182,122 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Blacklist (création réservée Commandement / Direction) ──
+      case 'blacklist': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('blacklist').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ blacklist: data });
+      }
+
+      case 'bl_add': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const photos = Array.isArray(body.photos) ? body.photos.slice(0, 4) : [];
+        const row = {
+          nom: String(body.nom || '').trim() || null,
+          date_bl: String(body.date_bl || '').trim() || null,
+          duree: String(body.duree || '').trim() || null,
+          motif: String(body.motif || '').trim() || null,
+          actif: body.actif !== false,
+          photos,
+          auteur_matricule: me.matricule,
+          auteur_nom: me.nom,
+        };
+        if (!row.nom || !row.motif) return fail('Nom et motif obligatoires');
+        const { error } = await sb().from('blacklist').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'bl_update': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const patch = {
+          nom: String(body.nom || '').trim() || null,
+          date_bl: String(body.date_bl || '').trim() || null,
+          duree: String(body.duree || '').trim() || null,
+          motif: String(body.motif || '').trim() || null,
+          actif: body.actif !== false,
+          photos: Array.isArray(body.photos) ? body.photos.slice(0, 4) : [],
+        };
+        if (!patch.nom || !patch.motif) return fail('Nom et motif obligatoires');
+        const { error } = await sb().from('blacklist').update(patch).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'bl_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('blacklist').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Communications / Annonces (création réservée Commandement / Direction) ──
+      case 'annonces': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('annonces').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ annonces: data });
+      }
+
+      case 'annonce_add': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Seuls le Commandement et la Direction peuvent publier une annonce', 403);
+        const PRIOS = ['NORMALE', 'IMPORTANTE', 'URGENTE'];
+        const photos = Array.isArray(body.photos) ? body.photos.slice(0, 4) : [];
+        const row = {
+          titre: String(body.titre || '').trim() || null,
+          contenu: String(body.contenu || '').trim() || null,
+          priorite: PRIOS.includes(body.priorite) ? body.priorite : 'NORMALE',
+          canal: String(body.canal || '').trim() || null,
+          date_annonce: String(body.date_annonce || '').trim() || null,
+          photos,
+          auteur_matricule: me.matricule,
+          auteur_nom: me.nom,
+        };
+        if (!row.titre || !row.contenu) return fail('Titre et contenu obligatoires');
+        const { error } = await sb().from('annonces').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'annonce_update': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Modification réservée au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const PRIOS = ['NORMALE', 'IMPORTANTE', 'URGENTE'];
+        const patch = {
+          titre: String(body.titre || '').trim() || null,
+          contenu: String(body.contenu || '').trim() || null,
+          priorite: PRIOS.includes(body.priorite) ? body.priorite : 'NORMALE',
+          canal: String(body.canal || '').trim() || null,
+          date_annonce: String(body.date_annonce || '').trim() || null,
+          photos: Array.isArray(body.photos) ? body.photos.slice(0, 4) : [],
+        };
+        if (!patch.titre || !patch.contenu) return fail('Titre et contenu obligatoires');
+        const { error } = await sb().from('annonces').update(patch).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'annonce_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Suppression réservée au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('annonces').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Sanctions (encodage réservé Commandement / Direction) ──
       case 'sanctions': {
         if (!me) return fail('Non authentifié', 401);
