@@ -4,7 +4,7 @@
 -- ════════════════════════════════════════════════════════════════
 
 DROP VIEW  IF EXISTS v_presence, v_comptes_admin, v_comptes_perms, v_effectifs;
-DROP TABLE IF EXISTS journal_comptes, presence, postes, patrouilles, absences, rapports, sanctions,
+DROP TABLE IF EXISTS journal_comptes, presence, postes, patrouilles, absences, rapports, sanctions, annonces, blacklist,
                      compte_formations, formations, comptes, grades CASCADE;
 
 -- ── 1. GRADES + permissions ─────────────────────────────────────
@@ -199,6 +199,34 @@ CREATE TABLE patrouilles (
   fin              VARCHAR(20),
   statut           VARCHAR(12) NOT NULL DEFAULT 'EN COURS' CHECK (statut IN ('EN COURS','TERMINÉE')),
   auteur_matricule VARCHAR(6),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
+-- ── 4g. BLACKLIST (avec photos compressées) ─────────────────────
+CREATE TABLE blacklist (
+  id               SERIAL PRIMARY KEY,
+  nom              VARCHAR(120),
+  date_bl          VARCHAR(40),
+  duree            VARCHAR(40),
+  motif            TEXT,
+  actif            BOOLEAN NOT NULL DEFAULT true,
+  photos           JSONB DEFAULT '[]'::jsonb,
+  auteur_matricule VARCHAR(6),
+  auteur_nom       VARCHAR(80),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
+-- ── 4f. ANNONCES (communications, avec photos compressées) ──────
+CREATE TABLE annonces (
+  id               SERIAL PRIMARY KEY,
+  titre            VARCHAR(160),
+  contenu          TEXT,
+  priorite         VARCHAR(12) DEFAULT 'NORMALE',
+  canal            VARCHAR(40),
+  date_annonce     VARCHAR(40),
+  photos           JSONB DEFAULT '[]'::jsonb,
+  auteur_matricule VARCHAR(6),
+  auteur_nom       VARCHAR(80),
   date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
 ) ;
 
