@@ -233,17 +233,48 @@ export default async function handler(req, res) {
       }
       case 'saisie_add': {
         if (!me) return fail('Non authentifié', 401);
+        const infractions = Array.isArray(body.infractions) ? body.infractions : [];
+        const total = infractions.reduce((s, it) => s + (Number(it.prix) || 0) * (Number(it.qte) || 1), 0);
         const row = {
-          objet: String(body.objet || '').trim() || null,
-          quantite: String(body.quantite || '').trim() || null,
-          personne: String(body.personne || '').trim() || null,
-          lieu: String(body.lieu || '').trim() || null,
+          nom: String(body.nom || '').trim() || null,
+          prenom: String(body.prenom || '').trim() || null,
           date_saisie: String(body.date_saisie || '').trim() || null,
+          heure_arrestation: String(body.heure_arrestation || '').trim() || null,
+          matricules_presents: String(body.matricules_presents || '').trim() || null,
+          etat_amendes: body.etat_amendes === 'PAYÉ' ? 'PAYÉ' : 'NON PAYÉ',
+          infractions,
+          total,
+          photos: Array.isArray(body.photos) ? body.photos.slice(0, 4) : [],
           par: me.nom,
           auteur_matricule: me.matricule,
         };
-        if (!row.objet) return fail('Objet obligatoire');
+        if (!row.nom) return fail('Nom obligatoire');
         const { error } = await sb().from('saisies').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'saisie_update': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { data: cur } = await sb().from('saisies').select('auteur_matricule').eq('id', id).maybeSingle();
+        if (cur && cur.auteur_matricule !== me.matricule && me.section !== 'comando' && me.section !== 'direction') return fail('Modification non autorisée', 403);
+        const infractions = Array.isArray(body.infractions) ? body.infractions : [];
+        const total = infractions.reduce((s, it) => s + (Number(it.prix) || 0) * (Number(it.qte) || 1), 0);
+        const patch = {
+          nom: String(body.nom || '').trim() || null,
+          prenom: String(body.prenom || '').trim() || null,
+          date_saisie: String(body.date_saisie || '').trim() || null,
+          heure_arrestation: String(body.heure_arrestation || '').trim() || null,
+          matricules_presents: String(body.matricules_presents || '').trim() || null,
+          etat_amendes: body.etat_amendes === 'PAYÉ' ? 'PAYÉ' : 'NON PAYÉ',
+          infractions,
+          total,
+          photos: Array.isArray(body.photos) ? body.photos.slice(0, 4) : [],
+        };
+        if (!patch.nom) return fail('Nom obligatoire');
+        const { error } = await sb().from('saisies').update(patch).eq('id', id);
         if (error) return fail(error.message);
         return res.status(200).json({ ok: true });
       }
