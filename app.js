@@ -23,6 +23,7 @@ const BADGE_TONES = {
   'SÉCURISÉE': 'green', 'SURVEILLANCE': 'amber', 'ALERTE': 'red',
   'RESTREINT': 'amber', 'HORS LIGNE': 'gray',
   'LEVÉ': 'gray', 'INACTIF': 'gray',
+  'PAYÉ': 'green', 'NON PAYÉ': 'red',
 };
 
 const badge = (value) => `<span class="badge badge-${BADGE_TONES[value] || 'gray'}">${value}</span>`;
@@ -267,11 +268,14 @@ const PAGES = {
 
   saisies: {
     title: 'SAISIES',
-    desc: 'Registre des saisies effectuées par la milice.',
+    desc: 'Rapports de saisie / amendes. Cliquez un rapport pour le détailler.',
     view: 'custom',
     get data() { return SAISIES; },
     stats: (rows) => [
-      ['Saisies', rows.length],
+      ['Rapports', rows.length],
+      ['Payés', rows.filter((r) => r.etat_amendes === 'PAYÉ').length],
+      ['Non payés', rows.filter((r) => r.etat_amendes === 'NON PAYÉ').length],
+      ['Total amendes', fmtMoney(rows.reduce((s, r) => s + (Number(r.total) || 0), 0))],
     ],
     render: () => `<div id="saiRoot" class="gestion-root">Chargement…</div>`,
     afterRender: () => loadSaisies(),
@@ -1964,7 +1968,19 @@ async function tigDelete(id) {
   renderTig(); refreshStats('tig');
 }
 
-// ── Page Saisies ──
+// ── Page Saisies (rapport de saisie / amendes) ──
+const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US').replace(/,/g, ' ');
+let SAI_ITEMS = []; // infractions du rapport en cours d'édition
+
+function grilleOptions() {
+  const byCat = {};
+  GRILLE.forEach((g, i) => { const k = g.cat || g.groupe || 'Autres'; (byCat[k] = byCat[k] || []).push({ g, i }); });
+  return Object.entries(byCat).map(([cat, list]) =>
+    `<optgroup label="${escapeHtml(cat)}">${list.map(({ g, i }) => `<option value="${i}">${escapeHtml(g.nom)} — ${g.prix != null ? fmtMoney(g.prix) : (g.peine || '')}</option>`).join('')}</optgroup>`
+  ).join('');
+}
+const saiTotal = (items) => items.reduce((s, it) => s + (Number(it.prix) || 0) * (Number(it.qte) || 1), 0);
+
 async function loadSaisies() {
   const root = document.getElementById('saiRoot');
   if (!root) return;
@@ -1977,71 +1993,186 @@ async function loadSaisies() {
 function renderSaisies() {
   const root = document.getElementById('saiRoot');
   if (!root) return;
-  const canDel = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
 
-  const rows = SAISIES.map((s) => `
-    <tr>
-      <td>${escapeHtml(s.objet) || '—'}</td>
-      <td>${escapeHtml(s.quantite) || '—'}</td>
-      <td>${escapeHtml(s.personne) || '—'}</td>
-      <td>${escapeHtml(s.lieu) || '—'}</td>
-      <td>${escapeHtml(s.date_saisie) || '—'}</td>
-      <td>${escapeHtml(s.par) || '—'}</td>
-      <td class="th-right">${canDel || (ME && s.auteur_matricule === ME.matricule) ? `<button class="gest-del sai-del" data-id="${s.id}" title="Supprimer">✕</button>` : ''}</td>
-    </tr>`).join('');
+  const cards = SAISIES.map((s) => {
+    const photos = s.photos || [];
+    const paye = s.etat_amendes === 'PAYÉ';
+    return `
+    <article class="bl-card" data-id="${s.id}">
+      ${photos.length ? `<div class="comm-thumb"><img src="${photos[0]}" alt="">${photos.length > 1 ? `<span class="comm-thumb-more">+${photos.length - 1}</span>` : ''}</div>` : ''}
+      <div class="comm-body">
+        <div class="feed-head">
+          <span class="feed-title">${escapeHtml(s.nom) || '—'} ${escapeHtml(s.prenom) || ''}</span>
+          <span class="badge ${paye ? 'badge-green' : 'badge-red'}">${paye ? 'PAYÉ' : 'NON PAYÉ'}</span>
+        </div>
+        <div class="bl-tags"><span class="sai-total">${fmtMoney(s.total)}</span><span class="bl-duree">${(s.infractions || []).length} infraction(s)</span></div>
+        <div class="feed-meta">Le ${escapeHtml(s.date_saisie) || '—'}${s.heure_arrestation ? ' · ' + escapeHtml(s.heure_arrestation) : ''} · par ${escapeHtml(s.par) || '—'}</div>
+      </div>
+    </article>`;
+  }).join('');
 
   root.innerHTML = `
     <div class="panel-head">
-      <div><span class="panel-kicker">Logistique</span><h2 class="panel-title">NOUVELLE SAISIE</h2></div>
-    </div>
-    <div class="pat-form">
-      <input class="gest-in" id="saiObjet" placeholder="Objet saisi">
-      <input class="gest-in" id="saiQte" placeholder="Quantité" style="max-width:130px">
-      <input class="gest-in" id="saiPersonne" placeholder="Saisi sur (nom)">
-      <input class="gest-in" id="saiLieu" placeholder="Lieu">
-      <div class="field-with-bolt" style="max-width:200px">
-        <input class="gest-in" id="saiDate" placeholder="Date">
-        <button class="bolt-btn" id="saiDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button>
+      <div><span class="panel-kicker">Amendes</span><h2 class="panel-title">RAPPORTS DE SAISIE</h2></div>
+      <div class="map-tools">
+        <span class="panel-count">${SAISIES.length}</span>
+        <button class="btn btn-primary btn-sm" id="saiNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVELLE SAISIE</button>
       </div>
-      <button class="btn btn-primary btn-sm" id="saiAdd">AJOUTER</button>
     </div>
-    <div class="panel-head" style="margin-top:20px">
-      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">SAISIES</h2></div>
-      <span class="panel-count">${SAISIES.length}</span>
-    </div>
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead><tr><th>Objet</th><th>Quantité</th><th>Saisi sur</th><th>Lieu</th><th>Date</th><th>Par</th><th class="th-right">Action</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      ${SAISIES.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUNE SAISIE</div><div class="empty-sub">Enregistrez-en une avec le formulaire ci-dessus.</div></div>'}
-    </div>`;
+    ${SAISIES.length ? `<div class="feed">${cards}</div>`
+      : '<div class="empty-state"><div class="empty-title">AUCUNE SAISIE</div><div class="empty-sub">Créez un rapport avec le bouton ci-dessus.</div></div>'}`;
 
-  root.querySelector('#saiDateNow').addEventListener('click', () => { root.querySelector('#saiDate').value = todayFR(); });
-  root.querySelector('#saiAdd').addEventListener('click', () => {
-    saisieAdd({
-      objet: root.querySelector('#saiObjet').value.trim(),
-      quantite: root.querySelector('#saiQte').value.trim(),
-      personne: root.querySelector('#saiPersonne').value.trim(),
-      lieu: root.querySelector('#saiLieu').value.trim(),
-      date_saisie: root.querySelector('#saiDate').value.trim(),
+  root.querySelectorAll('.bl-card').forEach((c) => c.addEventListener('click', () => openSaisie(+c.dataset.id)));
+  root.querySelector('#saiNew').addEventListener('click', () => openSaisieEditor(null));
+}
+
+function openSaisie(id) {
+  const s = SAISIES.find((x) => x.id === id);
+  if (!s) return;
+  const canEdit = !!(ME && (s.auteur_matricule === ME.matricule || ME.section === 'comando' || ME.section === 'direction'));
+  const photos = s.photos || [];
+  const paye = s.etat_amendes === 'PAYÉ';
+  openModal(`
+    <div class="modal-head">
+      <div>
+        <div class="modal-kicker">Rapport de saisie · par ${escapeHtml(s.par) || '—'}</div>
+        <h2 class="modal-title">${escapeHtml(s.nom) || '—'} ${escapeHtml(s.prenom) || ''}</h2>
+      </div>
+      <button class="popup-close" id="modalClose">✕</button>
+    </div>
+    <div class="bl-info">
+      <div class="bl-info-item"><span>Date</span><b>${escapeHtml(s.date_saisie) || '—'}</b></div>
+      <div class="bl-info-item"><span>Heure d'arrestation</span><b>${escapeHtml(s.heure_arrestation) || '—'}</b></div>
+      <div class="bl-info-item"><span>Matricule(s) présent(s)</span><b>${escapeHtml(s.matricules_presents) || '—'}</b></div>
+      <div class="bl-info-item"><span>État des amendes</span>${badge(paye ? 'PAYÉ' : 'NON PAYÉ')}</div>
+    </div>
+    <div class="modal-sub">Infractions</div>
+    <div class="sai-list">
+      ${(s.infractions || []).map((it) => `<div class="sai-line"><span>${escapeHtml(it.nom)}${it.qte > 1 ? ` (x${it.qte})` : ''}</span><b>${fmtMoney((Number(it.prix) || 0) * (Number(it.qte) || 1))}</b></div>`).join('') || '<div class="presence-empty">Aucune</div>'}
+    </div>
+    <div class="sai-total-row"><span>TOTAL DES AMENDES</span><strong>${fmtMoney(s.total)}</strong></div>
+    ${photos.length ? `<div class="comm-photos">${photos.map((p) => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" alt=""></a>`).join('')}</div>` : ''}
+    ${canEdit ? `<div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="saiEdit">MODIFIER</button>
+      <button class="btn btn-danger btn-sm" id="saiDel2"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SUPPRIMER</button>
+    </div>` : ''}
+  `);
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  if (canEdit) {
+    document.getElementById('saiEdit').addEventListener('click', () => openSaisieEditor(s));
+    document.getElementById('saiDel2').addEventListener('click', () => { if (confirm('Supprimer ce rapport ?')) saisieDelete(s.id); });
+  }
+}
+
+function openSaisieEditor(s) {
+  SAI_ITEMS = s && s.infractions ? s.infractions.map((it) => ({ ...it })) : [];
+  EDITOR_PHOTOS = s && s.photos ? [...s.photos] : [];
+  openModal(`
+    <div class="modal-head">
+      <h2 class="modal-title">${s ? 'MODIFIER LA SAISIE' : 'NOUVELLE SAISIE'}</h2>
+      <button class="popup-close" id="modalClose">✕</button>
+    </div>
+    <div class="ann-form">
+      <div class="ann-row">
+        <input class="gest-in" id="saiNom" placeholder="Nom" value="${s ? escapeHtml(s.nom || '') : ''}">
+        <input class="gest-in" id="saiPrenom" placeholder="Prénom" value="${s ? escapeHtml(s.prenom || '') : ''}">
+      </div>
+      <div class="ann-row">
+        <div class="field-with-bolt"><input class="gest-in" id="saiDate" placeholder="Date" value="${s ? escapeHtml(s.date_saisie || '') : ''}"><button class="bolt-btn" id="saiDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button></div>
+        <input class="gest-in" id="saiHeure" placeholder="Heure d'arrestation (ex. 20H00)" value="${s ? escapeHtml(s.heure_arrestation || '') : ''}">
+      </div>
+      <div class="ann-row">
+        <input class="gest-in" id="saiMats" placeholder="Matricule(s) présent(s)" value="${s ? escapeHtml(s.matricules_presents || '') : ''}">
+        <select class="gest-in" id="saiEtat" style="max-width:180px">
+          <option value="NON PAYÉ"${s && s.etat_amendes === 'NON PAYÉ' ? ' selected' : ''}>Non payé</option>
+          <option value="PAYÉ"${s && s.etat_amendes === 'PAYÉ' ? ' selected' : ''}>Payé</option>
+        </select>
+      </div>
+      <div class="modal-sub">Infractions (grille tarifaire)</div>
+      <div class="sai-add-row">
+        <select class="gest-in" id="saiPick">${grilleOptions()}</select>
+        <button class="btn btn-ghost btn-sm" id="saiAddItem">+ AJOUTER</button>
+      </div>
+      <div class="sai-items" id="saiItems"></div>
+      <div class="sai-total-row"><span>TOTAL</span><strong id="saiTotalDisp">$0</strong></div>
+      <div class="ann-photos-bar">
+        <label class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="2"/><path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/></svg>AJOUTER UNE PHOTO<input type="file" id="saiPhotoInput" accept="image/*" multiple hidden></label>
+        <span class="ann-photos-hint">Max ${MAX_PHOTOS} · compressées</span>
+      </div>
+      <div class="ann-thumbs" id="saiThumbs"></div>
+      <button class="btn btn-primary btn-sm" id="saiSave">${s ? 'ENREGISTRER' : 'CRÉER LE RAPPORT'}</button>
+    </div>
+  `);
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('saiDateNow').addEventListener('click', () => { document.getElementById('saiDate').value = todayFR(); });
+  renderSaiItems();
+  renderEditorThumbs('saiThumbs');
+
+  document.getElementById('saiAddItem').addEventListener('click', () => {
+    const g = GRILLE[+document.getElementById('saiPick').value];
+    if (!g) return;
+    SAI_ITEMS.push({ nom: g.nom, prix: g.prix || 0, qte: 1 });
+    renderSaiItems();
+  });
+  document.getElementById('saiPhotoInput').addEventListener('change', async (e) => {
+    for (const f of [...e.target.files]) { if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { alert(`Maximum ${MAX_PHOTOS} photos.`); break; } try { EDITOR_PHOTOS.push(await compressImage(f)); } catch (err) {} }
+    e.target.value = '';
+    renderEditorThumbs('saiThumbs');
+  });
+  document.getElementById('saiSave').addEventListener('click', () => {
+    saisieSave(s ? s.id : null, {
+      nom: document.getElementById('saiNom').value.trim(),
+      prenom: document.getElementById('saiPrenom').value.trim(),
+      date_saisie: document.getElementById('saiDate').value.trim(),
+      heure_arrestation: document.getElementById('saiHeure').value.trim(),
+      matricules_presents: document.getElementById('saiMats').value.trim(),
+      etat_amendes: document.getElementById('saiEtat').value,
+      infractions: SAI_ITEMS,
+      total: saiTotal(SAI_ITEMS),
+      photos: EDITOR_PHOTOS,
     });
   });
-  root.querySelectorAll('.sai-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer cette saisie ?')) saisieDelete(+b.dataset.id); }));
+}
+
+function renderSaiItems() {
+  const box = document.getElementById('saiItems');
+  if (!box) return;
+  box.innerHTML = SAI_ITEMS.map((it, i) => `
+    <div class="sai-item">
+      <span class="sai-item-nom">${escapeHtml(it.nom)}</span>
+      <input class="gest-in sai-qte" type="number" min="1" value="${it.qte || 1}" data-i="${i}" title="Quantité">
+      <span class="sai-item-prix">${fmtMoney((Number(it.prix) || 0) * (Number(it.qte) || 1))}</span>
+      <button class="ann-thumb-del sai-item-del" data-i="${i}" title="Retirer">✕</button>
+    </div>`).join('') || '<div class="presence-empty" style="padding:6px 0">Aucune infraction ajoutée.</div>';
+  const disp = document.getElementById('saiTotalDisp');
+  if (disp) disp.textContent = fmtMoney(saiTotal(SAI_ITEMS));
+  box.querySelectorAll('.sai-qte').forEach((inp) => inp.addEventListener('input', () => {
+    const i = +inp.dataset.i;
+    SAI_ITEMS[i].qte = Math.max(1, +inp.value || 1);
+    inp.closest('.sai-item').querySelector('.sai-item-prix').textContent = fmtMoney((Number(SAI_ITEMS[i].prix) || 0) * SAI_ITEMS[i].qte);
+    document.getElementById('saiTotalDisp').textContent = fmtMoney(saiTotal(SAI_ITEMS));
+  }));
+  box.querySelectorAll('.sai-item-del').forEach((b) => b.addEventListener('click', () => { SAI_ITEMS.splice(+b.dataset.i, 1); renderSaiItems(); }));
 }
 
 async function reloadSaisies() { try { SAISIES = (await api('saisies')).saisies || []; } catch (e) {} }
 
-async function saisieAdd(p) {
-  if (!p.objet) { alert('Indiquez l\'objet saisi.'); return; }
-  if (ME.demo) { SAISIES.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, ...p }); }
-  else { try { await api('saisie_add', p); } catch (e) { alert(e.message); return; } await reloadSaisies(); }
-  renderSaisies(); refreshStats('saisies');
+async function saisieSave(id, p) {
+  if (!p.nom) { alert('Le nom est obligatoire.'); return; }
+  if (ME.demo) {
+    if (id) { const s = SAISIES.find((x) => x.id === id); if (s) Object.assign(s, p); }
+    else SAISIES.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, ...p });
+  } else {
+    try { await api(id ? 'saisie_update' : 'saisie_add', id ? { id, ...p } : p); } catch (e) { alert(e.message); return; }
+    await reloadSaisies();
+  }
+  closeModal(); renderSaisies(); refreshStats('saisies');
 }
+
 async function saisieDelete(id) {
   if (ME.demo) { SAISIES = SAISIES.filter((x) => x.id !== id); }
   else { try { await api('saisie_delete', { id }); } catch (e) { alert(e.message); return; } await reloadSaisies(); }
-  renderSaisies(); refreshStats('saisies');
+  closeModal(); renderSaisies(); refreshStats('saisies');
 }
 
 // ── Page Sanctions ──

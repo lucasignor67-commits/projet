@@ -215,17 +215,21 @@ CREATE TABLE tig (
   date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
 ) ;
 
--- ── 4i. SAISIES ─────────────────────────────────────────────────
+-- ── 4i. SAISIES (rapports d'amende) ─────────────────────────────
 CREATE TABLE saisies (
-  id               SERIAL PRIMARY KEY,
-  objet            VARCHAR(120),
-  quantite         VARCHAR(40),
-  personne         VARCHAR(120),
-  lieu             VARCHAR(120),
-  date_saisie      VARCHAR(40),
-  par              VARCHAR(80),
-  auteur_matricule VARCHAR(6),
-  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                  SERIAL PRIMARY KEY,
+  nom                 VARCHAR(80),
+  prenom              VARCHAR(80),
+  date_saisie         VARCHAR(40),
+  heure_arrestation   VARCHAR(20),
+  matricules_presents VARCHAR(120),
+  etat_amendes        VARCHAR(12) DEFAULT 'NON PAYÉ',
+  infractions         JSONB DEFAULT '[]'::jsonb,
+  total               INTEGER DEFAULT 0,
+  photos              JSONB DEFAULT '[]'::jsonb,
+  par                 VARCHAR(80),
+  auteur_matricule    VARCHAR(6),
+  date_creation       TIMESTAMPTZ NOT NULL DEFAULT now()
 ) ;
 
 -- ── 4g. BLACKLIST (avec photos compressées) ─────────────────────

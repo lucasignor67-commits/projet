@@ -2107,3 +2107,25 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   border-radius: var(--radius-sm);
 }
 .bl-actif-row > span { font-size: 13px; color: var(--text-hi); font-weight: 600; }
+
+/* ═══════════════ SAISIES (rapport d'amende) ═══════════════ */
+.sai-total { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--green-400); margin-right: 10px; }
+.sai-add-row { display: flex; gap: 8px; }
+.sai-add-row .gest-in { flex: 1; }
+.sai-items { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+.sai-item { display: flex; align-items: center; gap: 10px; }
+.sai-item-nom { flex: 1; font-size: 13px; color: var(--text-hi); }
+.sai-qte { width: 62px; flex: 0 0 auto; text-align: center; }
+.sai-item-prix { min-width: 90px; text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--text-mid); }
+.sai-item-del { position: static; width: 24px; height: 24px; }
+.sai-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.sai-line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text-mid); padding: 4px 0; border-bottom: 1px solid rgba(74,222,128,0.06); }
+.sai-line b { color: var(--text-hi); font-family: var(--font-mono); }
+.sai-total-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 10px 14px; margin: 10px 0;
+  background: linear-gradient(145deg, rgba(74,222,128,0.1), rgba(74,222,128,0.02));
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+}
+.sai-total-row > span { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-low); }
+.sai-total-row strong { font-family: var(--font-mono); font-size: 20px; color: var(--green-400); }
