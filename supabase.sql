@@ -4,7 +4,7 @@
 -- ════════════════════════════════════════════════════════════════
 
 DROP VIEW  IF EXISTS v_presence, v_comptes_admin, v_comptes_perms, v_effectifs;
-DROP TABLE IF EXISTS journal_comptes, presence, postes, patrouilles, absences, rapports, sanctions, annonces, blacklist,
+DROP TABLE IF EXISTS journal_comptes, presence, postes, patrouilles, absences, rapports, sanctions, annonces, blacklist, tig, saisies,
                      compte_formations, formations, comptes, grades CASCADE;
 
 -- ── 1. GRADES + permissions ─────────────────────────────────────
@@ -198,6 +198,32 @@ CREATE TABLE patrouilles (
   debut            VARCHAR(20),
   fin              VARCHAR(20),
   statut           VARCHAR(12) NOT NULL DEFAULT 'EN COURS' CHECK (statut IN ('EN COURS','TERMINÉE')),
+  auteur_matricule VARCHAR(6),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
+-- ── 4h. TIG (travaux d'intérêt général) ─────────────────────────
+CREATE TABLE tig (
+  id               SERIAL PRIMARY KEY,
+  nom              VARCHAR(120),
+  heures           VARCHAR(40),
+  motif            VARCHAR(255),
+  date_tig         VARCHAR(40),
+  statut           VARCHAR(12) NOT NULL DEFAULT 'EN COURS' CHECK (statut IN ('EN COURS','TERMINÉ')),
+  par              VARCHAR(80),
+  auteur_matricule VARCHAR(6),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+) ;
+
+-- ── 4i. SAISIES ─────────────────────────────────────────────────
+CREATE TABLE saisies (
+  id               SERIAL PRIMARY KEY,
+  objet            VARCHAR(120),
+  quantite         VARCHAR(40),
+  personne         VARCHAR(120),
+  lieu             VARCHAR(120),
+  date_saisie      VARCHAR(40),
+  par              VARCHAR(80),
   auteur_matricule VARCHAR(6),
   date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
 ) ;

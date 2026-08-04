@@ -251,31 +251,30 @@ const PAGES = {
     afterRender: () => loadAbsences(),
   },
 
-  detenus: {
-    title: 'DÉTENUS',
-    desc: 'Registre des détenus et suivi des incarcérations.',
-    kicker: 'Détention',
-    listTitle: 'REGISTRE DES DÉTENUS',
-    addLabel: 'NOUVELLE INCARCÉRATION',
-    columns: [
-      { key: 'nom', label: 'Nom' },
-      { key: 'motif', label: 'Motif' },
-      { key: 'cellule', label: 'Cellule' },
-      { key: 'entree', label: 'Entrée' },
-      { key: 'duree', label: 'Durée' },
-      { key: 'statut', label: 'Statut', badge: true, align: 'right' },
-    ],
+  tig: {
+    title: 'TIG',
+    desc: 'Travaux d\'intérêt général — suivi des personnes assignées.',
+    view: 'custom',
+    get data() { return TIGS; },
     stats: (rows) => [
       ['Total', rows.length],
-      ['Incarcérés', countBy(rows, 'statut', 'INCARCÉRÉ')],
-      ['Libérés', countBy(rows, 'statut', 'LIBÉRÉ')],
-      ['Cellules', 4],
+      ['En cours', rows.filter((r) => r.statut === 'EN COURS').length],
+      ['Terminés', rows.filter((r) => r.statut === 'TERMINÉ').length],
     ],
-    data: [
-      { nom: 'Jax Turner', motif: 'Espionnage présumé', cellule: 'C-03', entree: '23/07/2026 02:05', duree: 'Indéterminée', statut: 'INCARCÉRÉ' },
-      { nom: 'Rico Morales', motif: 'Intrusion zone militaire', cellule: 'C-01', entree: '22/07/2026 20:14', duree: '48h', statut: 'INCARCÉRÉ' },
-      { nom: 'Sofía Delgado', motif: 'Vol de matériel', cellule: 'C-02', entree: '21/07/2026 15:40', duree: '24h', statut: 'LIBÉRÉ' },
+    render: () => `<div id="tigRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadTig(),
+  },
+
+  saisies: {
+    title: 'SAISIES',
+    desc: 'Registre des saisies effectuées par la milice.',
+    view: 'custom',
+    get data() { return SAISIES; },
+    stats: (rows) => [
+      ['Saisies', rows.length],
     ],
+    render: () => `<div id="saiRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadSaisies(),
   },
 
   blacklist: {
@@ -957,7 +956,7 @@ const PAGES = {
 // Ordre d'affichage sur la grille d'accueil
 const HOME_ORDER = [
   'effectifs', 'rapports', 'patrouilles', 'operations', 'absence', 'formation',
-  'detenus', 'hierarchie', 'blacklist', 'communications', 'sanctions', 'documentation',
+  'tig', 'saisies', 'hierarchie', 'blacklist', 'communications', 'sanctions', 'documentation',
   'carte', 'radio',
 ];
 
@@ -973,6 +972,8 @@ let PATROUILLES = [];    // patrouilles (page Patrouilles)
 let ABSENCES = [];       // absences (page Absence)
 let RAPPORTS = [];       // rapports (page Rapports)
 let SANCTIONS = [];      // sanctions (page Sanctions)
+let TIGS = [];           // TIG (page TIG)
+let SAISIES = [];        // saisies (page Saisies)
 let ANNONCES = [];       // annonces (page Communications)
 let BLACKLIST = [];      // blacklist (page Blacklist)
 let EDITOR_PHOTOS = [];  // photos (data URLs) de l'élément en cours d'édition (annonce / BL)
@@ -1874,6 +1875,173 @@ async function annonceDelete(id) {
   closeModal();
   renderAnnonces();
   refreshStats('communications');
+}
+
+// ── Page TIG ──
+async function loadTig() {
+  const root = document.getElementById('tigRoot');
+  if (!root) return;
+  try { if (!ME.demo) TIGS = (await api('tig')).tig || []; }
+  catch (e) { root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`; return; }
+  renderTig();
+  refreshStats('tig');
+}
+
+function renderTig() {
+  const root = document.getElementById('tigRoot');
+  if (!root) return;
+  const canDel = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
+
+  const rows = TIGS.map((t) => `
+    <tr>
+      <td>${escapeHtml(t.nom) || '—'}</td>
+      <td>${escapeHtml(t.heures) || '—'}</td>
+      <td>${escapeHtml(t.motif) || '—'}</td>
+      <td>${escapeHtml(t.date_tig) || '—'}</td>
+      <td>${escapeHtml(t.par) || '—'}</td>
+      <td>${badge(t.statut)}</td>
+      <td class="gest-actions">
+        ${t.statut === 'EN COURS' ? `<button class="btn btn-ghost btn-sm tig-finish" data-id="${t.id}">TERMINER</button>` : ''}
+        ${canDel || (ME && t.auteur_matricule === ME.matricule) ? `<button class="gest-del tig-del" data-id="${t.id}" title="Supprimer">✕</button>` : ''}
+      </td>
+    </tr>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Sanction</span><h2 class="panel-title">NOUVEAU TIG</h2></div>
+    </div>
+    <div class="pat-form">
+      <input class="gest-in" id="tigNom" placeholder="Nom & Prénom">
+      <input class="gest-in" id="tigHeures" placeholder="Heures (ex. 20h)" style="max-width:140px">
+      <input class="gest-in" id="tigMotif" placeholder="Motif">
+      <div class="field-with-bolt" style="max-width:200px">
+        <input class="gest-in" id="tigDate" placeholder="Date">
+        <button class="bolt-btn" id="tigDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="tigAdd">AJOUTER</button>
+    </div>
+    <div class="panel-head" style="margin-top:20px">
+      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">TIG EN COURS ET TERMINÉS</h2></div>
+      <span class="panel-count">${TIGS.length}</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Personne</th><th>Heures</th><th>Motif</th><th>Date</th><th>Assigné par</th><th>Statut</th><th class="th-right">Action</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${TIGS.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUN TIG</div><div class="empty-sub">Créez-en un avec le formulaire ci-dessus.</div></div>'}
+    </div>`;
+
+  root.querySelector('#tigDateNow').addEventListener('click', () => { root.querySelector('#tigDate').value = todayFR(); });
+  root.querySelector('#tigAdd').addEventListener('click', () => {
+    tigAdd({
+      nom: root.querySelector('#tigNom').value.trim(),
+      heures: root.querySelector('#tigHeures').value.trim(),
+      motif: root.querySelector('#tigMotif').value.trim(),
+      date_tig: root.querySelector('#tigDate').value.trim(),
+    });
+  });
+  root.querySelectorAll('.tig-finish').forEach((b) => b.addEventListener('click', () => tigFinish(+b.dataset.id)));
+  root.querySelectorAll('.tig-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer ce TIG ?')) tigDelete(+b.dataset.id); }));
+}
+
+async function reloadTig() { try { TIGS = (await api('tig')).tig || []; } catch (e) {} }
+
+async function tigAdd(p) {
+  if (!p.nom || !p.motif) { alert('Nom et motif obligatoires.'); return; }
+  if (ME.demo) { TIGS.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, statut: 'EN COURS', ...p }); }
+  else { try { await api('tig_add', p); } catch (e) { alert(e.message); return; } await reloadTig(); }
+  renderTig(); refreshStats('tig');
+}
+async function tigFinish(id) {
+  if (ME.demo) { const t = TIGS.find((x) => x.id === id); if (t) t.statut = 'TERMINÉ'; }
+  else { try { await api('tig_finish', { id }); } catch (e) { alert(e.message); return; } await reloadTig(); }
+  renderTig(); refreshStats('tig');
+}
+async function tigDelete(id) {
+  if (ME.demo) { TIGS = TIGS.filter((x) => x.id !== id); }
+  else { try { await api('tig_delete', { id }); } catch (e) { alert(e.message); return; } await reloadTig(); }
+  renderTig(); refreshStats('tig');
+}
+
+// ── Page Saisies ──
+async function loadSaisies() {
+  const root = document.getElementById('saiRoot');
+  if (!root) return;
+  try { if (!ME.demo) SAISIES = (await api('saisies')).saisies || []; }
+  catch (e) { root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`; return; }
+  renderSaisies();
+  refreshStats('saisies');
+}
+
+function renderSaisies() {
+  const root = document.getElementById('saiRoot');
+  if (!root) return;
+  const canDel = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
+
+  const rows = SAISIES.map((s) => `
+    <tr>
+      <td>${escapeHtml(s.objet) || '—'}</td>
+      <td>${escapeHtml(s.quantite) || '—'}</td>
+      <td>${escapeHtml(s.personne) || '—'}</td>
+      <td>${escapeHtml(s.lieu) || '—'}</td>
+      <td>${escapeHtml(s.date_saisie) || '—'}</td>
+      <td>${escapeHtml(s.par) || '—'}</td>
+      <td class="th-right">${canDel || (ME && s.auteur_matricule === ME.matricule) ? `<button class="gest-del sai-del" data-id="${s.id}" title="Supprimer">✕</button>` : ''}</td>
+    </tr>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Logistique</span><h2 class="panel-title">NOUVELLE SAISIE</h2></div>
+    </div>
+    <div class="pat-form">
+      <input class="gest-in" id="saiObjet" placeholder="Objet saisi">
+      <input class="gest-in" id="saiQte" placeholder="Quantité" style="max-width:130px">
+      <input class="gest-in" id="saiPersonne" placeholder="Saisi sur (nom)">
+      <input class="gest-in" id="saiLieu" placeholder="Lieu">
+      <div class="field-with-bolt" style="max-width:200px">
+        <input class="gest-in" id="saiDate" placeholder="Date">
+        <button class="bolt-btn" id="saiDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="saiAdd">AJOUTER</button>
+    </div>
+    <div class="panel-head" style="margin-top:20px">
+      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">SAISIES</h2></div>
+      <span class="panel-count">${SAISIES.length}</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Objet</th><th>Quantité</th><th>Saisi sur</th><th>Lieu</th><th>Date</th><th>Par</th><th class="th-right">Action</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${SAISIES.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUNE SAISIE</div><div class="empty-sub">Enregistrez-en une avec le formulaire ci-dessus.</div></div>'}
+    </div>`;
+
+  root.querySelector('#saiDateNow').addEventListener('click', () => { root.querySelector('#saiDate').value = todayFR(); });
+  root.querySelector('#saiAdd').addEventListener('click', () => {
+    saisieAdd({
+      objet: root.querySelector('#saiObjet').value.trim(),
+      quantite: root.querySelector('#saiQte').value.trim(),
+      personne: root.querySelector('#saiPersonne').value.trim(),
+      lieu: root.querySelector('#saiLieu').value.trim(),
+      date_saisie: root.querySelector('#saiDate').value.trim(),
+    });
+  });
+  root.querySelectorAll('.sai-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer cette saisie ?')) saisieDelete(+b.dataset.id); }));
+}
+
+async function reloadSaisies() { try { SAISIES = (await api('saisies')).saisies || []; } catch (e) {} }
+
+async function saisieAdd(p) {
+  if (!p.objet) { alert('Indiquez l\'objet saisi.'); return; }
+  if (ME.demo) { SAISIES.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, ...p }); }
+  else { try { await api('saisie_add', p); } catch (e) { alert(e.message); return; } await reloadSaisies(); }
+  renderSaisies(); refreshStats('saisies');
+}
+async function saisieDelete(id) {
+  if (ME.demo) { SAISIES = SAISIES.filter((x) => x.id !== id); }
+  else { try { await api('saisie_delete', { id }); } catch (e) { alert(e.message); return; } await reloadSaisies(); }
+  renderSaisies(); refreshStats('saisies');
 }
 
 // ── Page Sanctions ──
