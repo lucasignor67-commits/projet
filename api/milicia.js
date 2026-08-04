@@ -182,6 +182,82 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── TIG ──
+      case 'tig': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('tig').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ tig: data });
+      }
+      case 'tig_add': {
+        if (!me) return fail('Non authentifié', 401);
+        const row = {
+          nom: String(body.nom || '').trim() || null,
+          heures: String(body.heures || '').trim() || null,
+          motif: String(body.motif || '').trim() || null,
+          date_tig: String(body.date_tig || '').trim() || null,
+          statut: 'EN COURS',
+          par: me.nom,
+          auteur_matricule: me.matricule,
+        };
+        if (!row.nom || !row.motif) return fail('Nom et motif obligatoires');
+        const { error } = await sb().from('tig').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+      case 'tig_finish': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('tig').update({ statut: 'TERMINÉ' }).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+      case 'tig_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { data: t } = await sb().from('tig').select('auteur_matricule').eq('id', id).maybeSingle();
+        if (t && t.auteur_matricule !== me.matricule && me.section !== 'comando' && me.section !== 'direction') return fail('Suppression non autorisée', 403);
+        const { error } = await sb().from('tig').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Saisies ──
+      case 'saisies': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('saisies').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ saisies: data });
+      }
+      case 'saisie_add': {
+        if (!me) return fail('Non authentifié', 401);
+        const row = {
+          objet: String(body.objet || '').trim() || null,
+          quantite: String(body.quantite || '').trim() || null,
+          personne: String(body.personne || '').trim() || null,
+          lieu: String(body.lieu || '').trim() || null,
+          date_saisie: String(body.date_saisie || '').trim() || null,
+          par: me.nom,
+          auteur_matricule: me.matricule,
+        };
+        if (!row.objet) return fail('Objet obligatoire');
+        const { error } = await sb().from('saisies').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+      case 'saisie_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { data: s } = await sb().from('saisies').select('auteur_matricule').eq('id', id).maybeSingle();
+        if (s && s.auteur_matricule !== me.matricule && me.section !== 'comando' && me.section !== 'direction') return fail('Suppression non autorisée', 403);
+        const { error } = await sb().from('saisies').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Blacklist (création réservée Commandement / Direction) ──
       case 'blacklist': {
         if (!me) return fail('Non authentifié', 401);
