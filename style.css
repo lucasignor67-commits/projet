@@ -2129,3 +2129,14 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 }
 .sai-total-row > span { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-low); }
 .sai-total-row strong { font-family: var(--font-mono); font-size: 20px; color: var(--green-400); }
+
+/* ═══════════════ MODALE GRAND FORMAT (éditeur de saisie) ═══════════════ */
+.modal-card.modal-lg {
+  width: 75vw;
+  max-width: 1100px;
+  min-height: 70vh;
+}
+.modal-card.modal-lg .ann-area { min-height: 140px; }
+@media (max-width: 700px) {
+  .modal-card.modal-lg { width: 94vw; min-height: 0; }
+}
