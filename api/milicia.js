@@ -195,6 +195,7 @@ export default async function handler(req, res) {
           nom: String(body.nom || '').trim() || null,
           heures: String(body.heures || '').trim() || null,
           motif: String(body.motif || '').trim() || null,
+          amende: Number(body.amende) || 0,
           date_tig: String(body.date_tig || '').trim() || null,
           statut: 'EN COURS',
           par: me.nom,
