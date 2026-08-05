@@ -72,6 +72,12 @@ function renderGestion() {
           <span class="switch-slider"></span>
         </label>
       </td>
+      <td style="text-align:center">
+        <label class="switch" title="Peut accéder à la page Recruteur">
+          <input type="checkbox" class="gest-recruteur" ${a.recruteur ? 'checked' : ''} ${dis}>
+          <span class="switch-slider"></span>
+        </label>
+      </td>
       <td class="gest-actions">
         ${canEdit ? `<button class="btn btn-ghost btn-sm gest-save">Enregistrer</button>
         <button class="gest-del" title="Supprimer">✕</button>` : '<span class="gest-ro">lecture seule</span>'}
@@ -97,7 +103,7 @@ function renderGestion() {
     <div class="table-wrap">
       <table class="data-table gest-table">
         <thead><tr>
-          <th>N°</th><th>Nom</th><th>Grade</th><th>Statut</th>${canPwd ? '<th>Mot de passe</th>' : ''}<th>Formateur</th><th class="th-right">Actions</th>
+          <th>N°</th><th>Nom</th><th>Grade</th><th>Statut</th>${canPwd ? '<th>Mot de passe</th>' : ''}<th>Formateur</th><th>Recruteur</th><th class="th-right">Actions</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -133,11 +139,11 @@ function renderGestion() {
         statut: tr.querySelector('.gest-statut').value,
         mot_de_passe: tr.querySelector('.gest-pwd') ? tr.querySelector('.gest-pwd').value : undefined,
         formateur: tr.querySelector('.gest-formateur') ? tr.querySelector('.gest-formateur').checked : undefined,
+        recruteur: tr.querySelector('.gest-recruteur') ? tr.querySelector('.gest-recruteur').checked : undefined,
       });
     });
-    tr.querySelector('.gest-del')?.addEventListener('click', async () => {
-      if (!confirm(`Supprimer le compte ${mat} ?`)) return;
-      await accountDelete(mat);
+    tr.querySelector('.gest-del')?.addEventListener('click', () => {
+      confirmDialog(`Supprimer définitivement le compte ${mat} ?`, () => accountDelete(mat));
     });
   });
 }
@@ -178,6 +184,136 @@ async function accountDelete(mat) {
   }
   updateHomeStats();
   await loadGestion();
+}
+
+// ── Page Recruteur (ajout de recrues + contrats de travail) ──
+let RECRUIT_PHOTO = null; // photo (data URL) du contrat en cours de saisie
+
+async function loadRecruteur() {
+  const root = document.getElementById('recruteurRoot');
+  if (!root) return;
+  try { if (!ME.demo) CONTRATS = (await api('contrats')).contrats || []; }
+  catch (e) { root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`; return; }
+  renderRecruteur();
+  refreshStats('recruteur');
+}
+
+function renderRecruteur() {
+  const root = document.getElementById('recruteurRoot');
+  if (!root) return;
+  RECRUIT_PHOTO = null;
+
+  const cards = CONTRATS.map((c) => {
+    const canDel = !!(ME && (c.auteur_matricule === ME.matricule || ME.section === 'comando' || ME.section === 'direction' || ME.peut_modifier_comptes));
+    return `
+    <article class="contrat-card">
+      <div class="contrat-info">
+        <div class="contrat-line"><span>Matricule</span><b>${escapeHtml(c.matricule) || '—'}</b></div>
+        <div class="contrat-line"><span>Nom Prénom</span><b>${escapeHtml(c.nom) || '—'}</b></div>
+        <div class="contrat-line"><span>Téléphone</span><b>${escapeHtml(c.telephone) || '—'}</b></div>
+        <div class="contrat-line"><span>RIB</span><b>${escapeHtml(c.rib) || '—'}</b></div>
+        <div class="contrat-line"><span>Assermentation</span><b>${escapeHtml(c.assermentation) || '—'}</b></div>
+      </div>
+      ${c.photo ? `<a href="${c.photo}" target="_blank" rel="noopener" class="contrat-photo"><img src="${c.photo}" alt="Contrat ${escapeHtml(c.matricule)}"></a>` : '<div class="contrat-noimg">Aucune photo</div>'}
+      <div class="contrat-foot">
+        <span>par ${escapeHtml(c.cree_par) || '—'}</span>
+        ${canDel ? `<button class="gest-del contrat-del" data-id="${c.id}" title="Supprimer">✕</button>` : ''}
+      </div>
+    </article>`;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="dossier-layout">
+      <div class="grille-panel">
+        <div class="grille-toolbar">
+          <span class="panel-kicker">Contrats de travail</span>
+          <span class="grille-count">${CONTRATS.length} contrat${CONTRATS.length > 1 ? 's' : ''}</span>
+        </div>
+        <div class="contrat-grid">
+          ${CONTRATS.length ? cards : '<div class="cart-empty">Aucun contrat pour le moment.</div>'}
+        </div>
+      </div>
+      <aside class="dossier-panel">
+        <div class="dossier-head">
+          <div><span class="panel-kicker">Recrutement</span><h2 class="panel-title">NOUVELLE RECRUE</h2></div>
+          <span class="dossier-auto">grade auto : le plus bas</span>
+        </div>
+        <div class="dossier-fields">
+          <div class="dossier-row2">
+            <input class="gest-in" id="recMat" placeholder="Matricule">
+            <input class="gest-in" id="recTel" placeholder="Téléphone">
+          </div>
+          <input class="gest-in" id="recNom" placeholder="Nom Prénom">
+          <div class="dossier-row2">
+            <input class="gest-in" id="recRib" placeholder="RIB">
+            <input class="gest-in" id="recAss" placeholder="Assermentation">
+          </div>
+          <input class="gest-in" id="recPwd" placeholder="Mot de passe du compte">
+        </div>
+        <div class="ann-photos-bar">
+          <label class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="2"/><path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/></svg>PHOTO DU CONTRAT<input type="file" id="recPhotoInput" accept="image/*" hidden></label>
+          <span class="ann-photos-hint">1 image (compressée)</span>
+        </div>
+        <div class="ann-thumbs" id="recThumb"></div>
+        <div class="dossier-actions">
+          <button class="btn btn-primary btn-block" id="recSave">CRÉER LA RECRUE</button>
+        </div>
+      </aside>
+    </div>`;
+
+  renderRecruitThumb();
+  root.querySelector('#recPhotoInput').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (f) { try { RECRUIT_PHOTO = await compressImage(f); } catch (err) {} }
+    e.target.value = '';
+    renderRecruitThumb();
+  });
+  root.querySelector('#recSave').addEventListener('click', () => {
+    recruitAdd({
+      matricule: root.querySelector('#recMat').value.trim(),
+      nom: root.querySelector('#recNom').value.trim(),
+      telephone: root.querySelector('#recTel').value.trim(),
+      rib: root.querySelector('#recRib').value.trim(),
+      assermentation: root.querySelector('#recAss').value.trim(),
+      mot_de_passe: root.querySelector('#recPwd').value,
+      photo: RECRUIT_PHOTO,
+    });
+  });
+  root.querySelectorAll('.contrat-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement ce contrat ?', () => contratDelete(+b.dataset.id))));
+}
+
+function renderRecruitThumb() {
+  const box = document.getElementById('recThumb');
+  if (!box) return;
+  box.innerHTML = RECRUIT_PHOTO ? `<div class="ann-thumb"><img src="${RECRUIT_PHOTO}" alt=""><button class="ann-thumb-del" id="recPhotoDel" title="Retirer">✕</button></div>` : '';
+  const del = document.getElementById('recPhotoDel');
+  if (del) del.addEventListener('click', () => { RECRUIT_PHOTO = null; renderRecruitThumb(); });
+}
+
+async function recruitAdd(p) {
+  if (!p.matricule || !p.nom || !p.mot_de_passe) { alert('Matricule, nom et mot de passe obligatoires.'); return; }
+  if (!p.photo) { alert('La photo du contrat de travail est obligatoire.'); return; }
+  if (ME.demo) {
+    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { alert('Matricule déjà utilisé.'); return; }
+    const low = [...GRADES].sort((a, b) => a.niveau - b.niveau)[0] || { nom: 'Recluta' };
+    PAGES.effectifs.data.push({ matricule: p.matricule, nom: p.nom, grade: low.nom, statut: 'EN TEST' });
+    PAGES.effectifs.data.sort(byMatricule);
+    CONTRATS.unshift({ id: Date.now(), matricule: p.matricule, nom: p.nom, telephone: p.telephone, rib: p.rib, assermentation: p.assermentation, photo: p.photo, cree_par: ME.nom, auteur_matricule: ME.matricule });
+    updateHomeStats();
+  } else {
+    try { await api('recruit_add', p); await reloadContrats(); await api('effectifs').then((eff) => setEffectifs(eff)); }
+    catch (e) { alert(e.message); return; }
+    updateHomeStats();
+  }
+  renderRecruteur(); refreshStats('recruteur');
+}
+
+async function reloadContrats() { try { CONTRATS = (await api('contrats')).contrats || []; } catch (e) {} }
+
+async function contratDelete(id) {
+  if (ME.demo) { CONTRATS = CONTRATS.filter((c) => c.id !== id); }
+  else { try { await api('contrat_delete', { id }); } catch (e) { alert(e.message); return; } await reloadContrats(); }
+  renderRecruteur(); refreshStats('recruteur');
 }
 
 // ── Page Blacklist ──
@@ -281,7 +417,7 @@ function openBL(id) {
   document.getElementById('modalClose').addEventListener('click', closeModal);
   if (canManage) {
     document.getElementById('blEdit').addEventListener('click', () => openBLEditor(b));
-    document.getElementById('blDel').addEventListener('click', () => { if (confirm('Supprimer cette blacklist ?')) blDelete(b.id); });
+    document.getElementById('blDel').addEventListener('click', () => confirmDialog('Supprimer définitivement cette blacklist ?', () => blDelete(b.id)));
   }
 }
 

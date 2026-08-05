@@ -47,8 +47,23 @@ CREATE TABLE comptes (
   statut        VARCHAR(12) NOT NULL DEFAULT 'TITULAIRE' CHECK (statut IN ('TITULAIRE','EN TEST')),
   actif         BOOLEAN NOT NULL DEFAULT true,
   formateur     BOOLEAN NOT NULL DEFAULT false,
+  recruteur     BOOLEAN NOT NULL DEFAULT false,
   date_creation TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_maj      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── 2b. CONTRATS DE TRAVAIL (recrues créées par les recruteurs) ──
+CREATE TABLE contrats (
+  id               SERIAL PRIMARY KEY,
+  matricule        VARCHAR(6),
+  nom              VARCHAR(120),
+  telephone        VARCHAR(20),
+  rib              VARCHAR(40),
+  assermentation   VARCHAR(20),
+  photo            TEXT,
+  cree_par         VARCHAR(80),
+  auteur_matricule VARCHAR(6),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Met à jour date_maj automatiquement à chaque UPDATE
@@ -315,13 +330,13 @@ ORDER BY g.niveau DESC, c.matricule;
 CREATE VIEW v_comptes_perms AS
 SELECT c.matricule, c.nom, c.statut, g.nom AS grade, g.section, g.niveau,
        g.peut_ajouter_effectif, g.peut_modifier_comptes, g.peut_voir_mdp, g.peut_gerer_grades,
-       c.formateur
+       c.formateur, c.recruteur
 FROM comptes c JOIN grades g ON g.id = c.grade_id
 WHERE c.actif = true;
 
 CREATE VIEW v_comptes_admin AS
 SELECT c.matricule, c.nom, c.mot_de_passe, c.grade_id, g.nom AS grade, c.statut, c.actif, c.formateur,
-       c.date_creation, c.date_maj
+       c.date_creation, c.date_maj, c.recruteur
 FROM comptes c JOIN grades g ON g.id = c.grade_id
 ORDER BY g.niveau DESC, c.matricule;
 

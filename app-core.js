@@ -314,29 +314,22 @@ const PAGES = {
 
   radio: {
     title: 'RADIO',
-    desc: 'Canaux radio cryptés de la milice.',
+    desc: "Fréquences radio de la milice et de l'île.",
     kicker: 'Transmissions',
     listTitle: 'CANAUX ACTIFS',
     addLabel: 'NOUVEAU CANAL',
     columns: [
       { key: 'canal', label: 'Canal' },
-      { key: 'freq', label: 'Fréquence' },
-      { key: 'usage', label: 'Usage' },
-      { key: 'acces', label: 'Accès' },
-      { key: 'statut', label: 'Statut', badge: true, align: 'right' },
+      { key: 'freq', label: 'Fréquence', align: 'right' },
     ],
     stats: (rows) => [
       ['Canaux', rows.length],
-      ['Actifs', countBy(rows, 'statut', 'ACTIVE')],
-      ['Restreints', countBy(rows, 'statut', 'RESTREINT')],
-      ['Hors ligne', countBy(rows, 'statut', 'HORS LIGNE')],
     ],
     data: [
-      { canal: 'MILICIA-1', freq: '447.7 MHz', usage: 'Canal principal', acces: 'Tous', statut: 'ACTIVE' },
-      { canal: 'MILICIA-2', freq: '448.2 MHz', usage: 'Patrouilles', acces: 'Tous', statut: 'ACTIVE' },
-      { canal: 'MILICIA-OPS', freq: '449.9 MHz', usage: 'Opérations spéciales', acces: 'État-major', statut: 'RESTREINT' },
-      { canal: 'URGENCE', freq: '450.0 MHz', usage: "Canal d'urgence", acces: 'Tous', statut: 'ACTIVE' },
-      { canal: 'MILICIA-LOG', freq: '451.4 MHz', usage: 'Logistique', acces: 'Gradés', statut: 'HORS LIGNE' },
+      { canal: 'MILICE - Principale', freq: '10.24 MHz' },
+      { canal: 'CAYO GLOBAL', freq: '10.25 MHz' },
+      { canal: 'MILICE - Entraînements', freq: '10.26 MHz' },
+      { canal: 'République', freq: '10.27 MHz' },
     ],
   },
 
@@ -955,6 +948,20 @@ const PAGES = {
         });
       });
     },
+  },
+
+  /* ─────────── RECRUTEUR (ajout de recrues + contrats) ─────────── */
+  recruteur: {
+    title: 'RECRUTEUR',
+    desc: 'Ajout de nouvelles recrues (grade le plus bas) et contrats de travail.',
+    view: 'custom',
+    get data() { return CONTRATS; },
+    stats: (rows) => [
+      ['Contrats', rows.length],
+      ['Avec photo', rows.filter((r) => r.photo).length],
+    ],
+    render: () => `<div id="recruteurRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadRecruteur(),
   },
 };
 

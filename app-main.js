@@ -77,7 +77,7 @@ function renderSanctions() {
     const filtered = SANCTIONS.filter((s) => !q || [s.membre, s.type, s.motif, s.prononcee_par, s.date_sanction].some((v) => String(v || '').toLowerCase().includes(q)));
     root.querySelector('#sancBody').innerHTML = filtered.map((s) => sanctionRow(s, canManage)).join('');
     root.querySelector('#sancCount').textContent = filtered.length;
-    root.querySelectorAll('.sanc-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer cette sanction ?')) sanctionDelete(+b.dataset.id); }));
+    root.querySelectorAll('.sanc-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement cette sanction ?', () => sanctionDelete(+b.dataset.id))));
   });
 
   if (canManage) {
@@ -93,7 +93,7 @@ function renderSanctions() {
       });
     });
   }
-  root.querySelectorAll('.sanc-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer cette sanction ?')) sanctionDelete(+b.dataset.id); }));
+  root.querySelectorAll('.sanc-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement cette sanction ?', () => sanctionDelete(+b.dataset.id))));
 }
 
 async function reloadSanctions() {
@@ -212,9 +212,7 @@ function renderRapports() {
       note: root.querySelector('#rapNote').value.trim(),
     });
   });
-  root.querySelectorAll('.rap-del').forEach((b) => b.addEventListener('click', () => {
-    if (confirm('Supprimer ce rapport ?')) rapportDelete(+b.dataset.id);
-  }));
+  root.querySelectorAll('.rap-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement ce rapport ?', () => rapportDelete(+b.dataset.id))));
 }
 
 async function reloadRapports() {
@@ -323,9 +321,7 @@ function renderAbsences() {
       raison: root.querySelector('#absRaison').value.trim(),
     });
   });
-  root.querySelectorAll('.abs-del').forEach((b) => b.addEventListener('click', () => {
-    if (confirm('Supprimer cette absence ?')) absenceDelete(+b.dataset.id);
-  }));
+  root.querySelectorAll('.abs-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement cette absence ?', () => absenceDelete(+b.dataset.id))));
 }
 
 async function reloadAbsences() {
@@ -434,9 +430,7 @@ function renderPatrouilles() {
   });
 
   root.querySelectorAll('.pat-finish').forEach((b) => b.addEventListener('click', () => patrouilleFinish(+b.dataset.id)));
-  root.querySelectorAll('.pat-del').forEach((b) => b.addEventListener('click', () => {
-    if (confirm('Supprimer cette patrouille ?')) patrouilleDelete(+b.dataset.id);
-  }));
+  root.querySelectorAll('.pat-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement cette patrouille ?', () => patrouilleDelete(+b.dataset.id))));
 }
 
 async function reloadPatrouilles() {
@@ -561,9 +555,7 @@ function renderGestionFormations() {
     tr.querySelector('.gf-save').addEventListener('click', () => formationUpdate({
       id, nom: tr.querySelector('.gf-nom').value.trim(), categorie: tr.querySelector('.gf-cat').value,
     }));
-    tr.querySelector('.gf-del').addEventListener('click', () => {
-      if (confirm('Supprimer cette formation ? (les certifications liées seront retirées)')) formationDelete(id);
-    });
+    tr.querySelector('.gf-del').addEventListener('click', () => confirmDialog('Supprimer cette formation ? Les certifications liées seront retirées.', () => formationDelete(id)));
   });
 }
 
@@ -618,8 +610,8 @@ async function boot() {
     if (me && me.matricule) { ME = me; await afterLogin(); }
     else showLogin();
   } catch (e) {
-    // Pas de backend joignable → écran de connexion (+ mode démo possible)
-    showLogin("Serveur non joignable. Utilisez le mode démo ou vérifiez l'API / la base.");
+    // Pas de backend joignable → écran de connexion
+    showLogin("Serveur non joignable. Vérifiez l'API / la base.");
   }
 }
 

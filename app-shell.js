@@ -21,6 +21,7 @@ let TIGS = [];           // TIG (page TIG)
 let SAISIES = [];        // saisies (page Saisies)
 let ANNONCES = [];       // annonces (page Communications)
 let BLACKLIST = [];      // blacklist (page Blacklist)
+let CONTRATS = [];       // contrats de travail (page Recruteur)
 let EDITOR_PHOTOS = [];  // photos (data URLs) de l'élément en cours d'édition (annonce / BL)
 
 // ── Éléments DOM ──
@@ -257,17 +258,6 @@ loginForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Mode démo : pas de serveur, droits Dirección complets sur les données locales
-document.getElementById('loginDemo').addEventListener('click', async () => {
-  ME = {
-    matricule: '00', nom: 'Démo Dirección', grade: 'General', section: 'direction', niveau: 100,
-    peut_ajouter_effectif: 1, peut_modifier_comptes: 1, peut_voir_mdp: 1, peut_gerer_grades: 1, demo: true,
-  };
-  GRADES = DEMO_GRADES;
-  hideLogin();
-  await afterLogin();
-});
-
 document.getElementById('logoutBtn').addEventListener('click', () => {
   localStorage.removeItem(TOKEN_KEY);
   location.reload();
@@ -296,10 +286,12 @@ async function afterLogin() {
   // Section réservée visible selon les droits
   const canAdmin = ME.peut_ajouter_effectif || ME.peut_modifier_comptes || ME.peut_voir_mdp;
   const canFormateur = ME.formateur || canAdmin;
+  const canRecruteur = ME.recruteur || canAdmin;
   document.querySelectorAll('.nav-admin').forEach((el) => { el.hidden = !canAdmin; });
   document.querySelectorAll('.nav-formateur').forEach((el) => { el.hidden = !canFormateur; });
+  document.querySelectorAll('.nav-recruteur').forEach((el) => { el.hidden = !canRecruteur; });
   const divider = document.querySelector('.nav-divider.nav-reserved');
-  if (divider) divider.hidden = !(canFormateur || canAdmin);
+  if (divider) divider.hidden = !(canFormateur || canAdmin || canRecruteur);
 
   buildHomeGrid();
   updateHomeStats();

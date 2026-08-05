@@ -78,7 +78,7 @@ function openAnnonce(id) {
   document.getElementById('modalClose').addEventListener('click', closeModal);
   if (canManage) {
     document.getElementById('annEdit').addEventListener('click', () => openAnnonceEditor(a));
-    document.getElementById('annDel').addEventListener('click', () => { if (confirm('Supprimer cette annonce ?')) annonceDelete(a.id); });
+    document.getElementById('annDel').addEventListener('click', () => confirmDialog('Supprimer définitivement cette annonce ?', () => annonceDelete(a.id)));
   }
 }
 
@@ -145,7 +145,7 @@ function renderEditorThumbs(containerId = 'annThumbs') {
     <div class="ann-thumb"><img src="${p}" alt=""><button class="ann-thumb-del" data-i="${i}" title="Retirer">✕</button></div>`).join('');
   box.querySelectorAll('.ann-thumb-del').forEach((b) => b.addEventListener('click', () => {
     EDITOR_PHOTOS.splice(+b.dataset.i, 1);
-    renderEditorThumbs();
+    renderEditorThumbs(containerId);
   }));
 }
 
@@ -183,8 +183,170 @@ async function annonceDelete(id) {
   refreshStats('communications');
 }
 
+// ══════════════════════════════════════════════════════════════
+//  DOSSIER D'AMENDE — grille cherchable (gauche) + panier (droite)
+//  Composant partagé par les pages TIG et Saisies
+// ══════════════════════════════════════════════════════════════
+const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US').replace(/,/g, ' ');
+const saiTotal = (items) => items.reduce((s, it) => s + (Number(it.prix) || 0) * (Number(it.qte) || 1), 0);
+
+// Ordre des groupes affichés : Milicia d'abord, Gouvernement en bas
+const GRILLE_GROUP_ORDER = ['Milicia de Cayo Perico', 'Gouvernement'];
+
+// Regroupe la grille par groupe puis catégorie, dans l'ordre voulu
+function grilleGroups() {
+  const groups = {};
+  GRILLE.forEach((g, i) => {
+    const gr = g.groupe || 'Autres';
+    const cat = g.cat || '—';
+    groups[gr] = groups[gr] || {};
+    (groups[gr][cat] = groups[gr][cat] || []).push({ ...g, i });
+  });
+  const names = [
+    ...GRILLE_GROUP_ORDER.filter((n) => groups[n]),
+    ...Object.keys(groups).filter((n) => !GRILLE_GROUP_ORDER.includes(n)),
+  ];
+  return names.map((name) => ({ name, cats: groups[name] }));
+}
+
+// Panier d'amendes de la fiche en cours (réinitialisé à l'ouverture d'une page)
+let CART = [];            // [{ nom, prix, qte, peine, manual? }]
+let CART_SEARCH = '';
+let CART_COLLAPSED = {};  // { nomDuGroupe: true } → replié
+let CART_RERENDER = () => {};
+const cartTotal = () => saiTotal(CART);
+
+function cartAddIndex(i) {
+  const g = GRILLE[i];
+  if (!g) return;
+  const found = CART.find((it) => !it.manual && it.nom === g.nom);
+  if (found) found.qte = (Number(found.qte) || 1) + 1;
+  else CART.push({ nom: g.nom, prix: g.prix || 0, qte: 1, peine: g.peine || null });
+  CART_RERENDER();
+}
+
+function addManualLine() {
+  const nom = prompt('Libellé de la ligne :');
+  if (!nom || !nom.trim()) return;
+  const raw = prompt("Montant de l'amende ($) :", '0');
+  if (raw === null) return;
+  const prix = Math.max(0, Math.round(Number(String(raw).replace(/[^0-9.]/g, '')) || 0));
+  CART.push({ nom: nom.trim(), prix, qte: 1, manual: true });
+  CART_RERENDER();
+}
+
+// Fenêtre de confirmation stylée (remplace le confirm() natif du navigateur)
+function confirmDialog(message, onConfirm, opts = {}) {
+  openModal(`
+    <div class="modal-head">
+      <h2 class="modal-title">${escapeHtml(opts.title || 'Confirmer la suppression')}</h2>
+      <button class="popup-close" id="modalClose" type="button">✕</button>
+    </div>
+    <p class="confirm-msg">${escapeHtml(message)}</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="confirmNo" type="button">Annuler</button>
+      <button class="btn btn-danger btn-sm" id="confirmYes" type="button"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>${escapeHtml(opts.okLabel || 'Supprimer')}</button>
+    </div>
+  `, 'modal-sm');
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('confirmNo').addEventListener('click', closeModal);
+  document.getElementById('confirmYes').addEventListener('click', () => { closeModal(); onConfirm(); });
+}
+
+// Panneau de gauche : barre d'outils fixe + liste filtrable
+function renderGrillePanel(mountId) {
+  const mount = document.getElementById(mountId);
+  if (!mount) return;
+  mount.innerHTML = `
+    <div class="grille-toolbar">
+      <div class="grille-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input type="text" id="${mountId}Search" placeholder="Rechercher une infraction…" value="${escapeHtml(CART_SEARCH)}">
+      </div>
+      <button class="grille-tool-btn" id="${mountId}Collapse" type="button">Tout replier</button>
+      <span class="grille-count" id="${mountId}Count"></span>
+    </div>
+    <div class="grille-scroll" id="${mountId}List"></div>`;
+  const search = mount.querySelector(`#${mountId}Search`);
+  search.addEventListener('input', () => { CART_SEARCH = search.value; renderGrilleList(mountId + 'List', mountId + 'Count'); });
+  mount.querySelector(`#${mountId}Collapse`).addEventListener('click', (e) => {
+    const groups = grilleGroups();
+    const allCollapsed = groups.every((g) => CART_COLLAPSED[g.name]);
+    groups.forEach((g) => { CART_COLLAPSED[g.name] = !allCollapsed; });
+    e.currentTarget.textContent = allCollapsed ? 'Tout replier' : 'Tout déplier';
+    renderGrilleList(mountId + 'List', mountId + 'Count');
+  });
+  renderGrilleList(mountId + 'List', mountId + 'Count');
+}
+
+function renderGrilleList(listId, countId) {
+  const box = document.getElementById(listId);
+  if (!box) return;
+  const q = CART_SEARCH.trim().toLowerCase();
+  const match = (g) => !q || g.nom.toLowerCase().includes(q);
+  let grand = 0;
+  const html = grilleGroups().map((grp) => {
+    const cats = Object.entries(grp.cats).map(([cat, list]) => {
+      const filtered = list.filter(match);
+      if (!filtered.length) return '';
+      const rows = filtered.map((g) => `
+        <div class="grille-row">
+          <span class="grille-row-name">${escapeHtml(g.nom)}</span>
+          <span class="grille-row-price">${g.prix != null ? fmtMoney(g.prix) : escapeHtml(g.peine || '—')}</span>
+          <button class="btn-add-line" data-i="${g.i}" type="button">Ajouter</button>
+        </div>`).join('');
+      return `<div class="grille-cat"><div class="grille-cat-label">${escapeHtml(cat)}</div>${rows}</div>`;
+    }).join('');
+    const count = Object.values(grp.cats).reduce((s, l) => s + l.filter(match).length, 0);
+    grand += count;
+    if (!count) return '';
+    const collapsed = CART_COLLAPSED[grp.name];
+    return `
+      <section class="grille-group${collapsed ? ' is-collapsed' : ''}">
+        <button class="grille-group-head" data-grp="${escapeHtml(grp.name)}" type="button">
+          <span class="grille-group-name">${escapeHtml(grp.name)}</span>
+          <span class="grille-group-count">${count} infraction${count > 1 ? 's' : ''}</span>
+        </button>
+        <div class="grille-group-body">${cats}</div>
+      </section>`;
+  }).join('');
+  box.innerHTML = html || '<div class="cart-empty">Aucune infraction trouvée.</div>';
+  const cnt = document.getElementById(countId);
+  if (cnt) cnt.textContent = `${grand} infraction${grand > 1 ? 's' : ''}`;
+  box.querySelectorAll('.grille-group-head').forEach((h) => h.addEventListener('click', () => {
+    const name = h.dataset.grp;
+    CART_COLLAPSED[name] = !CART_COLLAPSED[name];
+    renderGrilleList(listId, countId);
+  }));
+  box.querySelectorAll('.btn-add-line').forEach((b) => b.addEventListener('click', () => cartAddIndex(+b.dataset.i)));
+}
+
+// Panier de droite : lignes d'amende avec quantité + total
+function renderCart(listId, totalId) {
+  const box = document.getElementById(listId);
+  if (!box) return;
+  box.innerHTML = CART.map((it, i) => `
+    <div class="cart-item">
+      <span class="cart-item-name">${escapeHtml(it.nom)}</span>
+      <div class="qty-stepper">
+        <button class="qty-btn" data-act="dec" data-i="${i}" type="button">−</button>
+        <span class="qty-val">${it.qte || 1}</span>
+        <button class="qty-btn" data-act="inc" data-i="${i}" type="button">+</button>
+      </div>
+      <span class="cart-item-price">${fmtMoney((Number(it.prix) || 0) * (Number(it.qte) || 1))}</span>
+      <button class="cart-item-del" data-i="${i}" type="button" title="Retirer">✕</button>
+    </div>`).join('') || '<div class="cart-empty">Aucune amende — ajoutez-en depuis la grille de gauche.</div>';
+  const t = document.getElementById(totalId);
+  if (t) t.textContent = fmtMoney(cartTotal());
+  box.querySelectorAll('.qty-btn').forEach((b) => b.addEventListener('click', () => {
+    const i = +b.dataset.i;
+    CART[i].qte = Math.max(1, (Number(CART[i].qte) || 1) + (b.dataset.act === 'inc' ? 1 : -1));
+    renderCart(listId, totalId);
+  }));
+  box.querySelectorAll('.cart-item-del').forEach((b) => b.addEventListener('click', () => { CART.splice(+b.dataset.i, 1); renderCart(listId, totalId); }));
+}
+
 // ── Page TIG ──
-let TIG_MOTIFS = []; // motifs choisis dans la grille pour le TIG en cours de création
 async function loadTig() {
   const root = document.getElementById('tigRoot');
   if (!root) return;
@@ -194,10 +356,10 @@ async function loadTig() {
   refreshStats('tig');
 }
 
+// Vue LISTE : uniquement le registre des TIG + bouton « Nouveau TIG »
 function renderTig() {
   const root = document.getElementById('tigRoot');
   if (!root) return;
-  TIG_MOTIFS = [];
   const canDel = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
 
   const rows = TIGS.map((t) => `
@@ -217,82 +379,83 @@ function renderTig() {
 
   root.innerHTML = `
     <div class="panel-head">
-      <div><span class="panel-kicker">Sanction</span><h2 class="panel-title">NOUVEAU TIG</h2></div>
-    </div>
-    <div class="pat-form">
-      <input class="gest-in" id="tigNom" placeholder="Nom & Prénom">
-      <input class="gest-in" id="tigHeures" placeholder="Heures (ex. 20h)" style="max-width:140px">
-      <div class="field-with-bolt" style="max-width:200px">
-        <input class="gest-in" id="tigDate" placeholder="Date">
-        <button class="bolt-btn" id="tigDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button>
+      <div><span class="panel-kicker">Sanction</span><h2 class="panel-title">TIG EN COURS ET TERMINÉS</h2></div>
+      <div class="map-tools">
+        <span class="panel-count">${TIGS.length}</span>
+        <button class="btn btn-primary btn-sm" id="tigNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVEAU TIG</button>
       </div>
-    </div>
-    <div class="pat-form" style="flex-direction:column;align-items:stretch;gap:10px">
-      <div class="modal-sub" style="margin-bottom:0">Motif(s) — grille des infractions</div>
-      <div class="sai-add-row">
-        <select class="gest-in" id="tigPick">${grilleOptions()}</select>
-        <button class="btn btn-ghost btn-sm" id="tigAddMotif" type="button">+ AJOUTER</button>
-      </div>
-      <input class="gest-in" id="tigMotifFree" placeholder="Motif libre (optionnel)">
-      <div class="sai-items" id="tigMotifs"></div>
-      <div class="sai-total-row"><span>Total amendes (indicatif)</span><strong id="tigMotifTotal">$0</strong></div>
-      <button class="btn btn-primary btn-sm" id="tigAdd" style="align-self:flex-start">AJOUTER LE TIG</button>
-    </div>
-    <div class="panel-head" style="margin-top:20px">
-      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">TIG EN COURS ET TERMINÉS</h2></div>
-      <span class="panel-count">${TIGS.length}</span>
     </div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Personne</th><th>Heures</th><th>Motif</th><th>Amende</th><th>Date</th><th>Assigné par</th><th>Statut</th><th class="th-right">Action</th></tr></thead>
+        <thead><tr><th>Personne</th><th>Heures</th><th>Matricule présent</th><th>Amende</th><th>Date</th><th>Assigné par</th><th>Statut</th><th class="th-right">Action</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      ${TIGS.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUN TIG</div><div class="empty-sub">Créez-en un avec le formulaire ci-dessus.</div></div>'}
+      ${TIGS.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUN TIG</div><div class="empty-sub">Créez-en un avec le bouton « Nouveau TIG ».</div></div>'}
     </div>`;
 
-  renderTigMotifs();
+  root.querySelector('#tigNew').addEventListener('click', () => renderTigEditor());
+  root.querySelectorAll('.tig-finish').forEach((b) => b.addEventListener('click', () => tigFinish(+b.dataset.id)));
+  root.querySelectorAll('.tig-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement ce TIG ?', () => tigDelete(+b.dataset.id))));
+}
+
+// Vue ÉDITEUR : dossier deux-panneaux pour créer un nouveau TIG
+function renderTigEditor() {
+  const root = document.getElementById('tigRoot');
+  if (!root) return;
+  CART = []; CART_SEARCH = ''; CART_COLLAPSED = {};
+
+  root.innerHTML = `
+    <div class="panel-head" style="margin-bottom:14px">
+      <div><span class="panel-kicker">Sanction</span><h2 class="panel-title">NOUVEAU TIG</h2></div>
+      <button class="btn btn-ghost btn-sm" id="tigBack" type="button">← Retour aux TIG</button>
+    </div>
+    <div class="dossier-layout">
+      <div class="grille-panel" id="tigGrille"></div>
+      <aside class="dossier-panel">
+        <div class="dossier-head">
+          <div><span class="panel-kicker">Dossier</span><h2 class="panel-title">DOSSIER TIG</h2></div>
+          <span class="dossier-auto">grille des infractions</span>
+        </div>
+        <div class="dossier-fields">
+          <input class="gest-in" id="tigNom" placeholder="Nom & Prénom">
+          <div class="dossier-row2">
+            <input class="gest-in" id="tigHeures" placeholder="Heures (ex. 20h)">
+            <div class="field-with-bolt"><input class="gest-in" id="tigDate" placeholder="Date"><button class="bolt-btn" id="tigDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button></div>
+          </div>
+          <input class="gest-in" id="tigMats" placeholder="Matricule(s) présent(s)">
+        </div>
+        <div class="cart-list" id="tigCart"></div>
+        <button class="dossier-link" id="tigManual" type="button">+ Ajouter une ligne manuelle</button>
+        <div class="cart-total-row"><span>Total amendes</span><strong id="tigTotal">$0</strong></div>
+        <div class="dossier-actions">
+          <button class="btn btn-primary btn-block" id="tigSave">ENREGISTRER LE TIG</button>
+          <button class="btn btn-ghost btn-block" id="tigClear" type="button">Vider</button>
+        </div>
+      </aside>
+    </div>`;
+
+  renderGrillePanel('tigGrille');
+  CART_RERENDER = () => renderCart('tigCart', 'tigTotal');
+  renderCart('tigCart', 'tigTotal');
+  root.querySelector('#tigBack').addEventListener('click', () => renderTig());
   root.querySelector('#tigDateNow').addEventListener('click', () => { root.querySelector('#tigDate').value = todayFR(); });
-  root.querySelector('#tigAddMotif').addEventListener('click', () => {
-    const g = GRILLE[+root.querySelector('#tigPick').value];
-    if (!g) return;
-    TIG_MOTIFS.push({ nom: g.nom, prix: g.prix, peine: g.peine });
-    renderTigMotifs();
-  });
-  root.querySelector('#tigAdd').addEventListener('click', () => {
-    const parts = TIG_MOTIFS.map((m) => m.nom);
-    const free = root.querySelector('#tigMotifFree').value.trim();
-    if (free) parts.unshift(free);
+  root.querySelector('#tigManual').addEventListener('click', addManualLine);
+  root.querySelector('#tigClear').addEventListener('click', () => renderTigEditor());
+  root.querySelector('#tigSave').addEventListener('click', () => {
     tigAdd({
       nom: root.querySelector('#tigNom').value.trim(),
       heures: root.querySelector('#tigHeures').value.trim(),
-      motif: parts.join(' · '),
-      amende: TIG_MOTIFS.reduce((s, m) => s + (Number(m.prix) || 0), 0),
+      motif: root.querySelector('#tigMats').value.trim(),
+      amende: cartTotal(),
       date_tig: root.querySelector('#tigDate').value.trim(),
     });
   });
-  root.querySelectorAll('.tig-finish').forEach((b) => b.addEventListener('click', () => tigFinish(+b.dataset.id)));
-  root.querySelectorAll('.tig-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer ce TIG ?')) tigDelete(+b.dataset.id); }));
-}
-
-// Liste des motifs choisis dans la grille (même principe que les infractions d'une saisie)
-function renderTigMotifs() {
-  const box = document.getElementById('tigMotifs');
-  if (!box) return;
-  box.innerHTML = TIG_MOTIFS.map((it, i) => `
-    <div class="sai-item">
-      <span class="sai-item-nom">${escapeHtml(it.nom)}</span>
-      <span class="sai-item-prix">${it.prix != null ? fmtMoney(it.prix) : escapeHtml(it.peine || '—')}</span>
-      <button class="ann-thumb-del sai-item-del" data-i="${i}" type="button" title="Retirer">✕</button>
-    </div>`).join('') || '<div class="presence-empty" style="padding:6px 0">Aucun motif depuis la grille — utilisez le menu ci-dessus ou le motif libre.</div>';
-  const disp = document.getElementById('tigMotifTotal');
-  if (disp) disp.textContent = fmtMoney(TIG_MOTIFS.reduce((s, it) => s + (Number(it.prix) || 0), 0));
-  box.querySelectorAll('.sai-item-del').forEach((b) => b.addEventListener('click', () => { TIG_MOTIFS.splice(+b.dataset.i, 1); renderTigMotifs(); }));
 }
 
 async function reloadTig() { try { TIGS = (await api('tig')).tig || []; } catch (e) {} }
 
 async function tigAdd(p) {
-  if (!p.nom || !p.motif) { alert('Nom et motif obligatoires.'); return; }
+  if (!p.nom) { alert('Le nom est obligatoire.'); return; }
   if (ME.demo) { TIGS.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, statut: 'EN COURS', ...p }); }
   else { try { await api('tig_add', p); } catch (e) { alert(e.message); return; } await reloadTig(); }
   renderTig(); refreshStats('tig');
@@ -309,17 +472,7 @@ async function tigDelete(id) {
 }
 
 // ── Page Saisies (rapport de saisie / amendes) ──
-const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString('en-US').replace(/,/g, ' ');
-let SAI_ITEMS = []; // infractions du rapport en cours d'édition
-
-function grilleOptions() {
-  const byCat = {};
-  GRILLE.forEach((g, i) => { const k = g.cat || g.groupe || 'Autres'; (byCat[k] = byCat[k] || []).push({ g, i }); });
-  return Object.entries(byCat).map(([cat, list]) =>
-    `<optgroup label="${escapeHtml(cat)}">${list.map(({ g, i }) => `<option value="${i}">${escapeHtml(g.nom)} — ${g.prix != null ? fmtMoney(g.prix) : (g.peine || '')}</option>`).join('')}</optgroup>`
-  ).join('');
-}
-const saiTotal = (items) => items.reduce((s, it) => s + (Number(it.prix) || 0) * (Number(it.qte) || 1), 0);
+let SAI_EDIT_ID = null; // id de la saisie en cours de modification (null = création)
 
 async function loadSaisies() {
   const root = document.getElementById('saiRoot');
@@ -330,6 +483,7 @@ async function loadSaisies() {
   refreshStats('saisies');
 }
 
+// Vue LISTE : uniquement les rapports passés + bouton « Nouvelle saisie »
 function renderSaisies() {
   const root = document.getElementById('saiRoot');
   if (!root) return;
@@ -337,8 +491,9 @@ function renderSaisies() {
   const cards = SAISIES.map((s) => {
     const photos = s.photos || [];
     const paye = s.etat_amendes === 'PAYÉ';
+    const canDel = !!(ME && (s.auteur_matricule === ME.matricule || ME.section === 'comando' || ME.section === 'direction'));
     return `
-    <article class="bl-card" data-id="${s.id}">
+    <article class="bl-card sai-card" data-id="${s.id}">
       ${photos.length ? `<div class="comm-thumb"><img src="${photos[0]}" alt="">${photos.length > 1 ? `<span class="comm-thumb-more">+${photos.length - 1}</span>` : ''}</div>` : ''}
       <div class="comm-body">
         <div class="feed-head">
@@ -348,6 +503,7 @@ function renderSaisies() {
         <div class="bl-tags"><span class="sai-total">${fmtMoney(s.total)}</span><span class="bl-duree">${(s.infractions || []).length} infraction(s)</span></div>
         <div class="feed-meta">Le ${escapeHtml(s.date_saisie) || '—'}${s.heure_arrestation ? ' · ' + escapeHtml(s.heure_arrestation) : ''} · par ${escapeHtml(s.par) || '—'}</div>
       </div>
+      ${canDel ? `<button class="gest-del sai-card-del" data-id="${s.id}" title="Supprimer">✕</button>` : ''}
     </article>`;
   }).join('');
 
@@ -360,139 +516,104 @@ function renderSaisies() {
       </div>
     </div>
     ${SAISIES.length ? `<div class="feed">${cards}</div>`
-      : '<div class="empty-state"><div class="empty-title">AUCUNE SAISIE</div><div class="empty-sub">Créez un rapport avec le bouton ci-dessus.</div></div>'}`;
+      : '<div class="empty-state"><div class="empty-title">AUCUNE SAISIE</div><div class="empty-sub">Créez un rapport avec le bouton « Nouvelle saisie ».</div></div>'}`;
 
-  root.querySelectorAll('.bl-card').forEach((c) => c.addEventListener('click', () => openSaisie(+c.dataset.id)));
-  root.querySelector('#saiNew').addEventListener('click', () => openSaisieEditor(null));
+  root.querySelector('#saiNew').addEventListener('click', () => renderSaiEditor(null));
+  root.querySelectorAll('.sai-card').forEach((c) => c.addEventListener('click', (e) => {
+    if (e.target.closest('.sai-card-del')) return;
+    renderSaiEditor(SAISIES.find((x) => x.id === +c.dataset.id));
+  }));
+  root.querySelectorAll('.sai-card-del').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    confirmDialog('Supprimer définitivement ce rapport de saisie ?', () => saisieDelete(+b.dataset.id));
+  }));
 }
 
-function openSaisie(id) {
-  const s = SAISIES.find((x) => x.id === id);
-  if (!s) return;
-  const canEdit = !!(ME && (s.auteur_matricule === ME.matricule || ME.section === 'comando' || ME.section === 'direction'));
-  const photos = s.photos || [];
-  const paye = s.etat_amendes === 'PAYÉ';
-  openModal(`
-    <div class="modal-head">
-      <div>
-        <div class="modal-kicker">Rapport de saisie · par ${escapeHtml(s.par) || '—'}</div>
-        <h2 class="modal-title">${escapeHtml(s.nom) || '—'} ${escapeHtml(s.prenom) || ''}</h2>
-      </div>
-      <button class="popup-close" id="modalClose">✕</button>
-    </div>
-    <div class="bl-info">
-      <div class="bl-info-item"><span>Date</span><b>${escapeHtml(s.date_saisie) || '—'}</b></div>
-      <div class="bl-info-item"><span>Heure d'arrestation</span><b>${escapeHtml(s.heure_arrestation) || '—'}</b></div>
-      <div class="bl-info-item"><span>Matricule(s) présent(s)</span><b>${escapeHtml(s.matricules_presents) || '—'}</b></div>
-      <div class="bl-info-item"><span>État des amendes</span>${badge(paye ? 'PAYÉ' : 'NON PAYÉ')}</div>
-    </div>
-    <div class="modal-sub">Infractions</div>
-    <div class="sai-list">
-      ${(s.infractions || []).map((it) => `<div class="sai-line"><span>${escapeHtml(it.nom)}${it.qte > 1 ? ` (x${it.qte})` : ''}</span><b>${fmtMoney((Number(it.prix) || 0) * (Number(it.qte) || 1))}</b></div>`).join('') || '<div class="presence-empty">Aucune</div>'}
-    </div>
-    <div class="sai-total-row"><span>TOTAL DES AMENDES</span><strong>${fmtMoney(s.total)}</strong></div>
-    ${photos.length ? `<div class="comm-photos">${photos.map((p) => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" alt=""></a>`).join('')}</div>` : ''}
-    ${canEdit ? `<div class="modal-actions">
-      <button class="btn btn-ghost btn-sm" id="saiEdit">MODIFIER</button>
-      <button class="btn btn-danger btn-sm" id="saiDel2"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SUPPRIMER</button>
-    </div>` : ''}
-  `);
-  document.getElementById('modalClose').addEventListener('click', closeModal);
-  if (canEdit) {
-    document.getElementById('saiEdit').addEventListener('click', () => openSaisieEditor(s));
-    document.getElementById('saiDel2').addEventListener('click', () => { if (confirm('Supprimer ce rapport ?')) saisieDelete(s.id); });
-  }
-}
-
-function openSaisieEditor(s) {
-  SAI_ITEMS = s && s.infractions ? s.infractions.map((it) => ({ ...it })) : [];
+// Vue ÉDITEUR : dossier deux-panneaux (création si s=null, sinon modification)
+function renderSaiEditor(s) {
+  const root = document.getElementById('saiRoot');
+  if (!root) return;
+  SAI_EDIT_ID = s ? s.id : null;
+  CART = s && s.infractions ? s.infractions.map((it) => ({ nom: it.nom, prix: it.prix, qte: it.qte || 1 })) : [];
+  CART_SEARCH = ''; CART_COLLAPSED = {};
   EDITOR_PHOTOS = s && s.photos ? [...s.photos] : [];
-  openModal(`
-    <div class="modal-head">
-      <h2 class="modal-title">${s ? 'MODIFIER LA SAISIE' : 'NOUVELLE SAISIE'}</h2>
-      <button class="popup-close" id="modalClose">✕</button>
+  const paye = !!(s && s.etat_amendes === 'PAYÉ');
+
+  root.innerHTML = `
+    <div class="panel-head" style="margin-bottom:14px">
+      <div><span class="panel-kicker">Amendes</span><h2 class="panel-title">${s ? 'MODIFIER LA SAISIE' : 'NOUVELLE SAISIE'}</h2></div>
+      <button class="btn btn-ghost btn-sm" id="saiBack" type="button">← Retour aux rapports</button>
     </div>
-    <div class="ann-form">
-      <div class="ann-row">
-        <input class="gest-in" id="saiNom" placeholder="Nom" value="${s ? escapeHtml(s.nom || '') : ''}">
-        <input class="gest-in" id="saiPrenom" placeholder="Prénom" value="${s ? escapeHtml(s.prenom || '') : ''}">
-      </div>
-      <div class="ann-row">
-        <div class="field-with-bolt"><input class="gest-in" id="saiDate" placeholder="Date" value="${s ? escapeHtml(s.date_saisie || '') : ''}"><button class="bolt-btn" id="saiDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button></div>
-        <input class="gest-in" id="saiHeure" placeholder="Heure d'arrestation (ex. 20H00)" value="${s ? escapeHtml(s.heure_arrestation || '') : ''}">
-      </div>
-      <div class="ann-row">
-        <input class="gest-in" id="saiMats" placeholder="Matricule(s) présent(s)" value="${s ? escapeHtml(s.matricules_presents || '') : ''}">
-        <select class="gest-in" id="saiEtat" style="max-width:180px">
-          <option value="NON PAYÉ"${s && s.etat_amendes === 'NON PAYÉ' ? ' selected' : ''}>Non payé</option>
-          <option value="PAYÉ"${s && s.etat_amendes === 'PAYÉ' ? ' selected' : ''}>Payé</option>
-        </select>
-      </div>
-      <div class="modal-sub">Infractions (grille tarifaire)</div>
-      <div class="sai-add-row">
-        <select class="gest-in" id="saiPick">${grilleOptions()}</select>
-        <button class="btn btn-ghost btn-sm" id="saiAddItem">+ AJOUTER</button>
-      </div>
-      <div class="sai-items" id="saiItems"></div>
-      <div class="sai-total-row"><span>TOTAL</span><strong id="saiTotalDisp">$0</strong></div>
-      <div class="ann-photos-bar">
-        <label class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="2"/><path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/></svg>AJOUTER UNE PHOTO<input type="file" id="saiPhotoInput" accept="image/*" multiple hidden></label>
-        <span class="ann-photos-hint">Max ${MAX_PHOTOS} · compressées</span>
-      </div>
-      <div class="ann-thumbs" id="saiThumbs"></div>
-      <button class="btn btn-primary btn-sm" id="saiSave">${s ? 'ENREGISTRER' : 'CRÉER LE RAPPORT'}</button>
-    </div>
-  `, 'modal-lg');
-  document.getElementById('modalClose').addEventListener('click', closeModal);
-  document.getElementById('saiDateNow').addEventListener('click', () => { document.getElementById('saiDate').value = todayFR(); });
-  renderSaiItems();
+    <div class="dossier-layout">
+      <div class="grille-panel" id="saiGrille"></div>
+      <aside class="dossier-panel">
+        <div class="dossier-head">
+          <div><span class="panel-kicker">Dossier</span><h2 class="panel-title">DOSSIER D'AMENDE</h2></div>
+          <span class="dossier-auto">${s ? 'par ' + (s.par || '—') : 'nouveau rapport'}</span>
+        </div>
+        <div class="dossier-fields">
+          <div class="dossier-row2">
+            <input class="gest-in" id="saiNom" placeholder="Nom" value="${s ? escapeHtml(s.nom || '') : ''}">
+            <input class="gest-in" id="saiPrenom" placeholder="Prénom" value="${s ? escapeHtml(s.prenom || '') : ''}">
+          </div>
+          <div class="dossier-row2">
+            <div class="field-with-bolt"><input class="gest-in" id="saiDate" placeholder="Date" value="${s ? escapeHtml(s.date_saisie || '') : ''}"><button class="bolt-btn" id="saiDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button></div>
+            <input class="gest-in" id="saiHeure" placeholder="Heure d'arrestation" value="${s ? escapeHtml(s.heure_arrestation || '') : ''}">
+          </div>
+          <input class="gest-in" id="saiMats" placeholder="Matricule(s) présent(s)" value="${s ? escapeHtml(s.matricules_presents || '') : ''}">
+          <div class="seg-toggle" id="saiEtatSeg">
+            <button type="button" class="seg-btn${paye ? ' is-on' : ''}" data-val="PAYÉ">Payé</button>
+            <button type="button" class="seg-btn${paye ? '' : ' is-on'}" data-val="NON PAYÉ">Non payé</button>
+          </div>
+        </div>
+        <div class="cart-list" id="saiCart"></div>
+        <button class="dossier-link" id="saiManual" type="button">+ Ajouter une ligne manuelle</button>
+        <div class="cart-total-row"><span>Total à payer</span><strong id="saiTotal">$0</strong></div>
+        <div class="ann-photos-bar">
+          <label class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="2"/><path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/></svg>PHOTO<input type="file" id="saiPhotoInput" accept="image/*" multiple hidden></label>
+          <span class="ann-photos-hint">Max ${MAX_PHOTOS} · compressées</span>
+        </div>
+        <div class="ann-thumbs" id="saiThumbs"></div>
+        <div class="dossier-actions">
+          <button class="btn btn-primary btn-block" id="saiSave">${s ? 'ENREGISTRER' : 'CRÉER LE RAPPORT'}</button>
+          ${s ? '' : '<button class="btn btn-ghost btn-block" id="saiClear" type="button">Vider</button>'}
+        </div>
+      </aside>
+    </div>`;
+
+  renderGrillePanel('saiGrille');
+  CART_RERENDER = () => renderCart('saiCart', 'saiTotal');
+  renderCart('saiCart', 'saiTotal');
   renderEditorThumbs('saiThumbs');
 
-  document.getElementById('saiAddItem').addEventListener('click', () => {
-    const g = GRILLE[+document.getElementById('saiPick').value];
-    if (!g) return;
-    SAI_ITEMS.push({ nom: g.nom, prix: g.prix || 0, qte: 1 });
-    renderSaiItems();
-  });
-  document.getElementById('saiPhotoInput').addEventListener('change', async (e) => {
+  root.querySelector('#saiBack').addEventListener('click', () => renderSaisies());
+  root.querySelector('#saiDateNow').addEventListener('click', () => { document.getElementById('saiDate').value = todayFR(); });
+  root.querySelector('#saiManual').addEventListener('click', addManualLine);
+  const clearBtn = root.querySelector('#saiClear');
+  if (clearBtn) clearBtn.addEventListener('click', () => renderSaiEditor(null));
+  root.querySelectorAll('#saiEtatSeg .seg-btn').forEach((b) => b.addEventListener('click', () => {
+    root.querySelectorAll('#saiEtatSeg .seg-btn').forEach((x) => x.classList.remove('is-on'));
+    b.classList.add('is-on');
+  }));
+  root.querySelector('#saiPhotoInput').addEventListener('change', async (e) => {
     for (const f of [...e.target.files]) { if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { alert(`Maximum ${MAX_PHOTOS} photos.`); break; } try { EDITOR_PHOTOS.push(await compressImage(f)); } catch (err) {} }
     e.target.value = '';
     renderEditorThumbs('saiThumbs');
   });
-  document.getElementById('saiSave').addEventListener('click', () => {
-    saisieSave(s ? s.id : null, {
+  root.querySelector('#saiSave').addEventListener('click', () => {
+    const onBtn = root.querySelector('#saiEtatSeg .seg-btn.is-on');
+    saisieSave(SAI_EDIT_ID, {
       nom: document.getElementById('saiNom').value.trim(),
       prenom: document.getElementById('saiPrenom').value.trim(),
       date_saisie: document.getElementById('saiDate').value.trim(),
       heure_arrestation: document.getElementById('saiHeure').value.trim(),
       matricules_presents: document.getElementById('saiMats').value.trim(),
-      etat_amendes: document.getElementById('saiEtat').value,
-      infractions: SAI_ITEMS,
-      total: saiTotal(SAI_ITEMS),
+      etat_amendes: onBtn ? onBtn.dataset.val : 'NON PAYÉ',
+      infractions: CART.map((it) => ({ nom: it.nom, prix: it.prix, qte: it.qte })),
+      total: cartTotal(),
       photos: EDITOR_PHOTOS,
     });
   });
-}
-
-function renderSaiItems() {
-  const box = document.getElementById('saiItems');
-  if (!box) return;
-  box.innerHTML = SAI_ITEMS.map((it, i) => `
-    <div class="sai-item">
-      <span class="sai-item-nom">${escapeHtml(it.nom)}</span>
-      <input class="gest-in sai-qte" type="number" min="1" value="${it.qte || 1}" data-i="${i}" title="Quantité">
-      <span class="sai-item-prix">${fmtMoney((Number(it.prix) || 0) * (Number(it.qte) || 1))}</span>
-      <button class="ann-thumb-del sai-item-del" data-i="${i}" title="Retirer">✕</button>
-    </div>`).join('') || '<div class="presence-empty" style="padding:6px 0">Aucune infraction ajoutée.</div>';
-  const disp = document.getElementById('saiTotalDisp');
-  if (disp) disp.textContent = fmtMoney(saiTotal(SAI_ITEMS));
-  box.querySelectorAll('.sai-qte').forEach((inp) => inp.addEventListener('input', () => {
-    const i = +inp.dataset.i;
-    SAI_ITEMS[i].qte = Math.max(1, +inp.value || 1);
-    inp.closest('.sai-item').querySelector('.sai-item-prix').textContent = fmtMoney((Number(SAI_ITEMS[i].prix) || 0) * SAI_ITEMS[i].qte);
-    document.getElementById('saiTotalDisp').textContent = fmtMoney(saiTotal(SAI_ITEMS));
-  }));
-  box.querySelectorAll('.sai-item-del').forEach((b) => b.addEventListener('click', () => { SAI_ITEMS.splice(+b.dataset.i, 1); renderSaiItems(); }));
 }
 
 async function reloadSaisies() { try { SAISIES = (await api('saisies')).saisies || []; } catch (e) {} }
@@ -506,12 +627,11 @@ async function saisieSave(id, p) {
     try { await api(id ? 'saisie_update' : 'saisie_add', id ? { id, ...p } : p); } catch (e) { alert(e.message); return; }
     await reloadSaisies();
   }
-  closeModal(); renderSaisies(); refreshStats('saisies');
+  renderSaisies(); refreshStats('saisies');
 }
 
 async function saisieDelete(id) {
   if (ME.demo) { SAISIES = SAISIES.filter((x) => x.id !== id); }
   else { try { await api('saisie_delete', { id }); } catch (e) { alert(e.message); return; } await reloadSaisies(); }
-  closeModal(); renderSaisies(); refreshStats('saisies');
+  renderSaisies(); refreshStats('saisies');
 }
-

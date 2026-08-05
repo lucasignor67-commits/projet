@@ -2140,3 +2140,196 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 @media (max-width: 700px) {
   .modal-card.modal-lg { width: 94vw; min-height: 0; }
 }
+
+/* ═══════════════ DOSSIER D'AMENDE (TIG / Saisies) ═══════════════ */
+.dossier-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── Panneau gauche : grille des infractions ── */
+.grille-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.grille-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.grille-search { position: relative; flex: 1; min-width: 200px; }
+.grille-search svg {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; color: var(--text-low); pointer-events: none;
+}
+.grille-search input {
+  width: 100%; height: 40px; padding: 0 12px 0 36px;
+  background: var(--bg-base); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-hi);
+  font-family: var(--font-body); font-size: 13px;
+}
+.grille-search input:focus { border-color: var(--border-strong); outline: none; }
+.grille-tool-btn {
+  height: 40px; padding: 0 14px; cursor: pointer;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-mid);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+}
+.grille-tool-btn:hover { color: var(--green-300); border-color: var(--border-strong); }
+.grille-count {
+  margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--text-low);
+}
+.grille-scroll { max-height: 74vh; overflow-y: auto; }
+.grille-group-head {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
+  padding: 13px 16px; cursor: pointer; text-align: left;
+  background: var(--bg-panel-2); border: none; border-top: 1px solid var(--border);
+}
+.grille-group-name {
+  font-family: var(--font-display); font-size: 14px; font-weight: 700;
+  letter-spacing: 1.2px; color: var(--green-400);
+}
+.grille-group-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-low); }
+.grille-group.is-collapsed .grille-group-body { display: none; }
+.grille-cat { padding-bottom: 6px; }
+.grille-cat-label {
+  padding: 10px 16px 4px; font-family: var(--font-mono); font-size: 9px;
+  font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-low);
+}
+.grille-row {
+  display: flex; align-items: center; gap: 12px; padding: 9px 16px;
+  border-top: 1px solid rgba(74, 222, 128, 0.06);
+}
+.grille-row:hover { background: var(--bg-hover); }
+.grille-row-name { flex: 1; font-size: 13px; color: var(--text-hi); }
+.grille-row-price {
+  min-width: 74px; text-align: right; font-family: var(--font-mono);
+  font-size: 12px; color: var(--text-mid);
+}
+.btn-add-line {
+  flex: 0 0 auto; height: 30px; padding: 0 12px; cursor: pointer;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--green-300);
+  font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 1px;
+}
+.btn-add-line:hover { background: rgba(34, 197, 94, 0.18); border-color: var(--border-strong); }
+
+/* ── Panneau droit : dossier + panier ── */
+.dossier-panel {
+  background: var(--bg-panel); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); padding: 16px; position: sticky; top: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.dossier-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+.dossier-auto {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px;
+  color: var(--text-low); text-transform: uppercase; text-align: right;
+}
+.dossier-fields { display: flex; flex-direction: column; gap: 8px; }
+.dossier-row2 { display: flex; gap: 8px; }
+.dossier-row2 > * { flex: 1; min-width: 0; }
+
+.seg-toggle { display: flex; gap: 6px; }
+.seg-btn {
+  flex: 1; height: 38px; cursor: pointer;
+  background: var(--bg-base); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-mid);
+  font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: 1px;
+}
+.seg-btn.is-on {
+  color: var(--green-100);
+  background: linear-gradient(145deg, rgba(34, 197, 94, 0.32), rgba(22, 163, 74, 0.14));
+  border-color: var(--border-strong);
+}
+
+.cart-list { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; }
+.cart-item { display: flex; align-items: center; gap: 8px; }
+.cart-item-name { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-hi); }
+.qty-stepper { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.qty-btn {
+  width: 24px; height: 24px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text-mid); font-size: 15px; line-height: 1;
+}
+.qty-btn:hover { color: var(--green-300); border-color: var(--border-strong); }
+.qty-val { min-width: 22px; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-hi); }
+.cart-item-price { min-width: 78px; text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--text-mid); }
+.cart-item-del {
+  width: 22px; height: 22px; flex: 0 0 auto; cursor: pointer;
+  background: transparent; border: none; color: var(--text-low); font-size: 13px;
+}
+.cart-item-del:hover { color: var(--danger); }
+.cart-empty { padding: 12px 4px; font-size: 12px; color: var(--text-low); text-align: center; }
+
+.dossier-link {
+  align-self: flex-start; background: none; border: none; cursor: pointer;
+  color: var(--green-400); font-family: var(--font-mono); font-size: 11px; padding: 2px 0;
+}
+.dossier-link:hover { color: var(--green-300); text-decoration: underline; }
+
+.cart-total-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0 4px; border-top: 1px solid var(--border);
+}
+.cart-total-row > span {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-low);
+}
+.cart-total-row strong { font-family: var(--font-mono); font-size: 22px; color: var(--green-400); }
+
+.dossier-actions { display: flex; flex-direction: column; gap: 8px; }
+.btn-block { width: 100%; flex: none; min-width: 0; }
+
+.sai-card { position: relative; }
+.sai-card-del { position: absolute; top: 10px; right: 10px; }
+
+@media (max-width: 900px) {
+  .dossier-layout { grid-template-columns: 1fr; }
+  .dossier-panel { position: static; }
+}
+
+/* Fenêtre de confirmation (suppression) */
+.modal-card.modal-sm { width: 420px; }
+.confirm-msg { font-size: 14px; line-height: 1.55; color: var(--text-mid); padding: 4px 0 2px; }
+
+/* ═══════════════ RECRUTEUR — contrats de travail ═══════════════ */
+.contrat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  max-height: 74vh;
+  overflow-y: auto;
+}
+.contrat-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.contrat-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; }
+.contrat-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12.5px; }
+.contrat-line span {
+  color: var(--text-low); font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.5px; text-transform: uppercase;
+}
+.contrat-line b { color: var(--text-hi); text-align: right; word-break: break-word; }
+.contrat-photo { display: block; background: var(--bg-base); }
+.contrat-photo img { width: 100%; display: block; max-height: 220px; object-fit: cover; }
+.contrat-noimg { padding: 24px; text-align: center; color: var(--text-low); font-size: 12px; background: var(--bg-base); }
+.contrat-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px; border-top: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-low);
+}
+.contrat-del { position: static; width: 24px; height: 24px; }
