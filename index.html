@@ -270,6 +270,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="grille.js"></script>
-  <script src="app.js"></script>
+  <!-- app.js découpé — l'ordre de chargement est important -->
+  <script src="app-core.js"></script>
+  <script src="app-shell.js"></script>
+  <script src="app-admin.js"></script>
+  <script src="app-content.js"></script>
+  <script src="app-main.js"></script>
 </body>
 </html>
