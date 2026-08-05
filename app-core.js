@@ -261,6 +261,7 @@ const PAGES = {
       ['Total', rows.length],
       ['En cours', rows.filter((r) => r.statut === 'EN COURS').length],
       ['Terminés', rows.filter((r) => r.statut === 'TERMINÉ').length],
+      ['Total amendes', fmtMoney(rows.reduce((s, r) => s + (Number(r.amende) || 0), 0))],
     ],
     render: () => `<div id="tigRoot" class="gestion-root">Chargement…</div>`,
     afterRender: () => loadTig(),

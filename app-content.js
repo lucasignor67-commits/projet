@@ -184,6 +184,7 @@ async function annonceDelete(id) {
 }
 
 // ── Page TIG ──
+let TIG_MOTIFS = []; // motifs choisis dans la grille pour le TIG en cours de création
 async function loadTig() {
   const root = document.getElementById('tigRoot');
   if (!root) return;
@@ -196,6 +197,7 @@ async function loadTig() {
 function renderTig() {
   const root = document.getElementById('tigRoot');
   if (!root) return;
+  TIG_MOTIFS = [];
   const canDel = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
 
   const rows = TIGS.map((t) => `
@@ -203,6 +205,7 @@ function renderTig() {
       <td>${escapeHtml(t.nom) || '—'}</td>
       <td>${escapeHtml(t.heures) || '—'}</td>
       <td>${escapeHtml(t.motif) || '—'}</td>
+      <td>${t.amende ? fmtMoney(t.amende) : '—'}</td>
       <td>${escapeHtml(t.date_tig) || '—'}</td>
       <td>${escapeHtml(t.par) || '—'}</td>
       <td>${badge(t.statut)}</td>
@@ -219,12 +222,21 @@ function renderTig() {
     <div class="pat-form">
       <input class="gest-in" id="tigNom" placeholder="Nom & Prénom">
       <input class="gest-in" id="tigHeures" placeholder="Heures (ex. 20h)" style="max-width:140px">
-      <input class="gest-in" id="tigMotif" placeholder="Motif">
       <div class="field-with-bolt" style="max-width:200px">
         <input class="gest-in" id="tigDate" placeholder="Date">
         <button class="bolt-btn" id="tigDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button>
       </div>
-      <button class="btn btn-primary btn-sm" id="tigAdd">AJOUTER</button>
+    </div>
+    <div class="pat-form" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div class="modal-sub" style="margin-bottom:0">Motif(s) — grille des infractions</div>
+      <div class="sai-add-row">
+        <select class="gest-in" id="tigPick">${grilleOptions()}</select>
+        <button class="btn btn-ghost btn-sm" id="tigAddMotif" type="button">+ AJOUTER</button>
+      </div>
+      <input class="gest-in" id="tigMotifFree" placeholder="Motif libre (optionnel)">
+      <div class="sai-items" id="tigMotifs"></div>
+      <div class="sai-total-row"><span>Total amendes (indicatif)</span><strong id="tigMotifTotal">$0</strong></div>
+      <button class="btn btn-primary btn-sm" id="tigAdd" style="align-self:flex-start">AJOUTER LE TIG</button>
     </div>
     <div class="panel-head" style="margin-top:20px">
       <div><span class="panel-kicker">Registre</span><h2 class="panel-title">TIG EN COURS ET TERMINÉS</h2></div>
@@ -232,23 +244,49 @@ function renderTig() {
     </div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Personne</th><th>Heures</th><th>Motif</th><th>Date</th><th>Assigné par</th><th>Statut</th><th class="th-right">Action</th></tr></thead>
+        <thead><tr><th>Personne</th><th>Heures</th><th>Motif</th><th>Amende</th><th>Date</th><th>Assigné par</th><th>Statut</th><th class="th-right">Action</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       ${TIGS.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUN TIG</div><div class="empty-sub">Créez-en un avec le formulaire ci-dessus.</div></div>'}
     </div>`;
 
+  renderTigMotifs();
   root.querySelector('#tigDateNow').addEventListener('click', () => { root.querySelector('#tigDate').value = todayFR(); });
+  root.querySelector('#tigAddMotif').addEventListener('click', () => {
+    const g = GRILLE[+root.querySelector('#tigPick').value];
+    if (!g) return;
+    TIG_MOTIFS.push({ nom: g.nom, prix: g.prix, peine: g.peine });
+    renderTigMotifs();
+  });
   root.querySelector('#tigAdd').addEventListener('click', () => {
+    const parts = TIG_MOTIFS.map((m) => m.nom);
+    const free = root.querySelector('#tigMotifFree').value.trim();
+    if (free) parts.unshift(free);
     tigAdd({
       nom: root.querySelector('#tigNom').value.trim(),
       heures: root.querySelector('#tigHeures').value.trim(),
-      motif: root.querySelector('#tigMotif').value.trim(),
+      motif: parts.join(' · '),
+      amende: TIG_MOTIFS.reduce((s, m) => s + (Number(m.prix) || 0), 0),
       date_tig: root.querySelector('#tigDate').value.trim(),
     });
   });
   root.querySelectorAll('.tig-finish').forEach((b) => b.addEventListener('click', () => tigFinish(+b.dataset.id)));
   root.querySelectorAll('.tig-del').forEach((b) => b.addEventListener('click', () => { if (confirm('Supprimer ce TIG ?')) tigDelete(+b.dataset.id); }));
+}
+
+// Liste des motifs choisis dans la grille (même principe que les infractions d'une saisie)
+function renderTigMotifs() {
+  const box = document.getElementById('tigMotifs');
+  if (!box) return;
+  box.innerHTML = TIG_MOTIFS.map((it, i) => `
+    <div class="sai-item">
+      <span class="sai-item-nom">${escapeHtml(it.nom)}</span>
+      <span class="sai-item-prix">${it.prix != null ? fmtMoney(it.prix) : escapeHtml(it.peine || '—')}</span>
+      <button class="ann-thumb-del sai-item-del" data-i="${i}" type="button" title="Retirer">✕</button>
+    </div>`).join('') || '<div class="presence-empty" style="padding:6px 0">Aucun motif depuis la grille — utilisez le menu ci-dessus ou le motif libre.</div>';
+  const disp = document.getElementById('tigMotifTotal');
+  if (disp) disp.textContent = fmtMoney(TIG_MOTIFS.reduce((s, it) => s + (Number(it.prix) || 0), 0));
+  box.querySelectorAll('.sai-item-del').forEach((b) => b.addEventListener('click', () => { TIG_MOTIFS.splice(+b.dataset.i, 1); renderTigMotifs(); }));
 }
 
 async function reloadTig() { try { TIGS = (await api('tig')).tig || []; } catch (e) {} }
