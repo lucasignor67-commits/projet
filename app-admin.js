@@ -124,7 +124,7 @@ function renderGestion() {
       statut: root.querySelector('#addStatut').value,
       mot_de_passe: root.querySelector('#addPwd').value,
     };
-    if (!payload.matricule || !payload.nom) { alert('Matricule et nom obligatoires.'); return; }
+    if (!payload.matricule || !payload.nom) { notify('Matricule et nom obligatoires.'); return; }
     await accountAdd(payload);
   });
 
@@ -151,13 +151,13 @@ function renderGestion() {
 // Actions comptes (serveur ou démo local)
 async function accountAdd(p) {
   if (ME.demo) {
-    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { alert('Matricule déjà utilisé.'); return; }
+    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { notify('Matricule déjà utilisé.'); return; }
     const grade = (DEMO_GRADES.find((g) => g.id === p.grade_id) || {}).nom || 'Recluta';
     PAGES.effectifs.data.push({ matricule: p.matricule, nom: p.nom, grade, statut: p.statut });
     PAGES.effectifs.data.sort(byMatricule);
   } else {
     try { await api('account_add', p); await api('effectifs').then((eff) => setEffectifs(eff)); }
-    catch (e) { alert(e.message); return; }
+    catch (e) { notify(e.message); return; }
   }
   updateHomeStats();
   await loadGestion();
@@ -170,7 +170,7 @@ async function accountUpdate(p) {
     if (row) { row.nom = p.nom; row.grade = grade; row.statut = p.statut; }
   } else {
     try { await api('account_update', p); await api('effectifs').then((eff) => setEffectifs(eff)); }
-    catch (e) { alert(e.message); return; }
+    catch (e) { notify(e.message); return; }
   }
   await loadGestion();
 }
@@ -180,7 +180,7 @@ async function accountDelete(mat) {
     PAGES.effectifs.data = PAGES.effectifs.data.filter((e) => e.matricule !== mat);
   } else {
     try { await api('account_delete', { matricule: mat }); await api('effectifs').then((eff) => setEffectifs(eff)); }
-    catch (e) { alert(e.message); return; }
+    catch (e) { notify(e.message); return; }
   }
   updateHomeStats();
   await loadGestion();
@@ -291,10 +291,10 @@ function renderRecruitThumb() {
 }
 
 async function recruitAdd(p) {
-  if (!p.matricule || !p.nom || !p.mot_de_passe) { alert('Matricule, nom et mot de passe obligatoires.'); return; }
-  if (!p.photo) { alert('La photo du contrat de travail est obligatoire.'); return; }
+  if (!p.matricule || !p.nom || !p.mot_de_passe) { notify('Matricule, nom et mot de passe obligatoires.'); return; }
+  if (!p.photo) { notify('La photo du contrat de travail est obligatoire.'); return; }
   if (ME.demo) {
-    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { alert('Matricule déjà utilisé.'); return; }
+    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { notify('Matricule déjà utilisé.'); return; }
     const low = [...GRADES].sort((a, b) => a.niveau - b.niveau)[0] || { nom: 'Recluta' };
     PAGES.effectifs.data.push({ matricule: p.matricule, nom: p.nom, grade: low.nom, statut: 'EN TEST' });
     PAGES.effectifs.data.sort(byMatricule);
@@ -302,7 +302,7 @@ async function recruitAdd(p) {
     updateHomeStats();
   } else {
     try { await api('recruit_add', p); await reloadContrats(); await api('effectifs').then((eff) => setEffectifs(eff)); }
-    catch (e) { alert(e.message); return; }
+    catch (e) { notify(e.message); return; }
     updateHomeStats();
   }
   renderRecruteur(); refreshStats('recruteur');
@@ -312,7 +312,7 @@ async function reloadContrats() { try { CONTRATS = (await api('contrats')).contr
 
 async function contratDelete(id) {
   if (ME.demo) { CONTRATS = CONTRATS.filter((c) => c.id !== id); }
-  else { try { await api('contrat_delete', { id }); } catch (e) { alert(e.message); return; } await reloadContrats(); }
+  else { try { await api('contrat_delete', { id }); } catch (e) { notify(e.message); return; } await reloadContrats(); }
   renderRecruteur(); refreshStats('recruteur');
 }
 
@@ -459,7 +459,7 @@ function openBLEditor(b) {
   renderEditorThumbs('blThumbs');
   document.getElementById('blPhotoInput').addEventListener('change', async (e) => {
     for (const f of [...e.target.files]) {
-      if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { alert(`Maximum ${MAX_PHOTOS} photos.`); break; }
+      if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { notify(`Maximum ${MAX_PHOTOS} photos.`); break; }
       try { EDITOR_PHOTOS.push(await compressImage(f)); } catch (err) { /* ignore */ }
     }
     e.target.value = '';
@@ -482,12 +482,12 @@ async function reloadBlacklist() {
 }
 
 async function blSave(id, p) {
-  if (!p.nom || !p.motif) { alert('Nom et motif obligatoires.'); return; }
+  if (!p.nom || !p.motif) { notify('Nom et motif obligatoires.'); return; }
   if (ME.demo) {
     if (id) { const b = BLACKLIST.find((x) => x.id === id); if (b) Object.assign(b, p); }
     else BLACKLIST.unshift({ id: Date.now(), auteur_matricule: ME.matricule, auteur_nom: ME.nom, ...p });
   } else {
-    try { await api(id ? 'bl_update' : 'bl_add', id ? { id, ...p } : p); } catch (e) { alert(e.message); return; }
+    try { await api(id ? 'bl_update' : 'bl_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
     await reloadBlacklist();
   }
   closeModal();
@@ -499,7 +499,7 @@ async function blDelete(id) {
   if (ME.demo) {
     BLACKLIST = BLACKLIST.filter((x) => x.id !== id);
   } else {
-    try { await api('bl_delete', { id }); } catch (e) { alert(e.message); return; }
+    try { await api('bl_delete', { id }); } catch (e) { notify(e.message); return; }
     await reloadBlacklist();
   }
   closeModal();

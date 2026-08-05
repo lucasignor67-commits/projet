@@ -149,10 +149,10 @@ newBtn.addEventListener('click', () => {
   // L'ajout de membre passe par la Gestion des comptes (droits requis)
   if (currentPage === 'effectifs') {
     if (ME && (ME.peut_ajouter_effectif || ME.peut_modifier_comptes)) navigate('gestion');
-    else alert("Seuls les grades Comando / Dirección peuvent ajouter un membre.");
+    else notify("Seuls les grades Comando / Dirección peuvent ajouter un membre.");
     return;
   }
-  alert(`${PAGES[currentPage]?.addLabel || 'Ajouter'} — à implémenter`);
+  notify(`${PAGES[currentPage]?.addLabel || 'Ajouter'} — à implémenter`);
 });
 
 // ── Grille de rubriques sur l'accueil ──

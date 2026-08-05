@@ -101,11 +101,11 @@ async function reloadSanctions() {
 }
 
 async function sanctionAdd(p) {
-  if (!p.membre || !p.motif || !p.date_sanction) { alert('Membre, motif et date sont obligatoires.'); return; }
+  if (!p.membre || !p.motif || !p.date_sanction) { notify('Membre, motif et date sont obligatoires.'); return; }
   if (ME.demo) {
     SANCTIONS.unshift({ id: Date.now(), prononcee_par: ME.nom, auteur_matricule: ME.matricule, ...p });
   } else {
-    try { await api('sanction_add', p); } catch (e) { alert(e.message); return; }
+    try { await api('sanction_add', p); } catch (e) { notify(e.message); return; }
     await reloadSanctions();
   }
   renderSanctions();
@@ -116,7 +116,7 @@ async function sanctionDelete(id) {
   if (ME.demo) {
     SANCTIONS = SANCTIONS.filter((x) => x.id !== id);
   } else {
-    try { await api('sanction_delete', { id }); } catch (e) { alert(e.message); return; }
+    try { await api('sanction_delete', { id }); } catch (e) { notify(e.message); return; }
     await reloadSanctions();
   }
   renderSanctions();
@@ -221,13 +221,13 @@ async function reloadRapports() {
 
 async function rapportAdd(p) {
   if (!p.date_rapport || !p.agent_rapport || !p.concerne || !p.fait) {
-    alert('Merci de remplir les champs obligatoires (marqués *).');
+    notify('Merci de remplir les champs obligatoires (marqués *).');
     return;
   }
   if (ME.demo) {
     RAPPORTS.unshift({ id: Date.now(), auteur_matricule: ME.matricule, ...p });
   } else {
-    try { await api('rapport_add', p); } catch (e) { alert(e.message); return; }
+    try { await api('rapport_add', p); } catch (e) { notify(e.message); return; }
     await reloadRapports();
   }
   renderRapports();
@@ -238,7 +238,7 @@ async function rapportDelete(id) {
   if (ME.demo) {
     RAPPORTS = RAPPORTS.filter((x) => x.id !== id);
   } else {
-    try { await api('rapport_delete', { id }); } catch (e) { alert(e.message); return; }
+    try { await api('rapport_delete', { id }); } catch (e) { notify(e.message); return; }
     await reloadRapports();
   }
   renderRapports();
@@ -329,11 +329,11 @@ async function reloadAbsences() {
 }
 
 async function absenceAdd(p) {
-  if (!p.date_depart || !p.date_retour) { alert('Indiquez la date de départ et de retour.'); return; }
+  if (!p.date_depart || !p.date_retour) { notify('Indiquez la date de départ et de retour.'); return; }
   if (ME.demo) {
     ABSENCES.unshift({ id: Date.now(), matricule: ME.matricule, nom: ME.nom, ...p });
   } else {
-    try { await api('absence_add', p); } catch (e) { alert(e.message); return; }
+    try { await api('absence_add', p); } catch (e) { notify(e.message); return; }
     await reloadAbsences();
   }
   renderAbsences();
@@ -344,7 +344,7 @@ async function absenceDelete(id) {
   if (ME.demo) {
     ABSENCES = ABSENCES.filter((x) => x.id !== id);
   } else {
-    try { await api('absence_delete', { id }); } catch (e) { alert(e.message); return; }
+    try { await api('absence_delete', { id }); } catch (e) { notify(e.message); return; }
     await reloadAbsences();
   }
   renderAbsences();
@@ -438,11 +438,11 @@ async function reloadPatrouilles() {
 }
 
 async function patrouilleAdd(p) {
-  if (!p.matricules) { alert('Indiquez au moins un matricule.'); return; }
+  if (!p.matricules) { notify('Indiquez au moins un matricule.'); return; }
   if (ME.demo) {
     PATROUILLES.unshift({ id: Date.now(), ...p, fin: '', statut: 'EN COURS' });
   } else {
-    try { await api('patrouille_add', p); } catch (e) { alert(e.message); return; }
+    try { await api('patrouille_add', p); } catch (e) { notify(e.message); return; }
     await reloadPatrouilles();
   }
   renderPatrouilles();
@@ -455,7 +455,7 @@ async function patrouilleFinish(id) {
     const p = PATROUILLES.find((x) => x.id === id);
     if (p) { p.fin = fin; p.statut = 'TERMINÉE'; }
   } else {
-    try { await api('patrouille_finish', { id, fin }); } catch (e) { alert(e.message); return; }
+    try { await api('patrouille_finish', { id, fin }); } catch (e) { notify(e.message); return; }
     await reloadPatrouilles();
   }
   renderPatrouilles();
@@ -466,7 +466,7 @@ async function patrouilleDelete(id) {
   if (ME.demo) {
     PATROUILLES = PATROUILLES.filter((x) => x.id !== id);
   } else {
-    try { await api('patrouille_delete', { id }); } catch (e) { alert(e.message); return; }
+    try { await api('patrouille_delete', { id }); } catch (e) { notify(e.message); return; }
     await reloadPatrouilles();
   }
   renderPatrouilles();
@@ -482,7 +482,7 @@ async function certifToggle(mat, formation, has) {
     else { const i = arr.indexOf(formation); if (i >= 0) arr.splice(i, 1); }
   } else {
     try { await api('certif_set', { matricule: mat, formation, has }); }
-    catch (e) { alert(e.message); return; }
+    catch (e) { notify(e.message); return; }
     try { const fm = await api('formations'); if (fm.certifs) PAGES.formation.certifs = fm.certifs; } catch (e) {}
   }
   // Re-render la matrice si on est sur Debrief
@@ -569,23 +569,23 @@ async function reloadFormationColumns() {
 }
 
 async function formationAdd(p) {
-  if (!p.nom) { alert('Nom de la formation obligatoire.'); return; }
+  if (!p.nom) { notify('Nom de la formation obligatoire.'); return; }
   if (ME.demo) {
     PAGES.formation.formations.push({ nom: p.nom, cat: CAT_DB_TO_UI[p.categorie] || 'veh' });
   } else {
-    try { await api('formation_add', p); } catch (e) { alert(e.message); return; }
+    try { await api('formation_add', p); } catch (e) { notify(e.message); return; }
     await reloadFormationColumns();
   }
   await loadGestionFormations();
 }
 
 async function formationUpdate(p) {
-  if (!p.nom) { alert('Nom de la formation obligatoire.'); return; }
+  if (!p.nom) { notify('Nom de la formation obligatoire.'); return; }
   if (ME.demo) {
     const f = PAGES.formation.formations[p.id - 1];
     if (f) { f.nom = p.nom; f.cat = CAT_DB_TO_UI[p.categorie] || 'veh'; }
   } else {
-    try { await api('formation_update', p); } catch (e) { alert(e.message); return; }
+    try { await api('formation_update', p); } catch (e) { notify(e.message); return; }
     await reloadFormationColumns();
   }
   await loadGestionFormations();
@@ -595,7 +595,7 @@ async function formationDelete(id) {
   if (ME.demo) {
     PAGES.formation.formations.splice(id - 1, 1);
   } else {
-    try { await api('formation_delete', { id }); } catch (e) { alert(e.message); return; }
+    try { await api('formation_delete', { id }); } catch (e) { notify(e.message); return; }
     await reloadFormationColumns();
   }
   await loadGestionFormations();

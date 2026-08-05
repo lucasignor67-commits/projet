@@ -2333,3 +2333,36 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   font-family: var(--font-mono); font-size: 10px; color: var(--text-low);
 }
 .contrat-del { position: static; width: 24px; height: 24px; }
+
+/* ═══════════════ NOTIFICATIONS (toasts) ═══════════════ */
+.toast-host {
+  position: fixed; top: 18px; right: 18px; z-index: 700;
+  display: flex; flex-direction: column; gap: 10px;
+  max-width: min(360px, calc(100vw - 36px)); pointer-events: none;
+}
+.toast {
+  pointer-events: auto; cursor: pointer;
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(160deg, var(--bg-panel-2), var(--bg-panel));
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--green-400);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color: var(--text-hi); font-size: 13px; line-height: 1.4;
+  opacity: 0; transform: translateX(20px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.toast.show { opacity: 1; transform: translateX(0); }
+.toast-ico {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; margin-top: 1px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  background: var(--green-glow); color: var(--green-300);
+}
+.toast-msg { flex: 1; word-break: break-word; }
+.toast-error { border-left-color: var(--danger); }
+.toast-error .toast-ico { background: rgba(239, 68, 68, 0.16); color: #fca5a5; }
+@media (max-width: 700px) {
+  .toast-host { left: 12px; right: 12px; top: 12px; max-width: none; }
+}

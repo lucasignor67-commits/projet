@@ -78,7 +78,7 @@ async function togglePost(nom) {
   try {
     if (PRESENCE[mat] === nom) await api('presence_clear');
     else await api('presence_set', { poste: nom });
-  } catch (e) { alert(e.message); return; }
+  } catch (e) { notify(e.message); return; }
   await loadPresence(); // le temps réel rafraîchira aussi les autres
 }
 

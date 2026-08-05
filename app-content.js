@@ -120,7 +120,7 @@ function openAnnonceEditor(a) {
   document.getElementById('annPhotoInput').addEventListener('change', async (e) => {
     const files = [...e.target.files];
     for (const f of files) {
-      if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { alert(`Maximum ${MAX_PHOTOS} photos.`); break; }
+      if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { notify(`Maximum ${MAX_PHOTOS} photos.`); break; }
       try { EDITOR_PHOTOS.push(await compressImage(f)); } catch (err) { /* ignore */ }
     }
     e.target.value = '';
@@ -150,7 +150,7 @@ function renderEditorThumbs(containerId = 'annThumbs') {
 }
 
 async function annonceSave(id, p) {
-  if (!p.titre || !p.contenu) { alert('Titre et contenu obligatoires.'); return; }
+  if (!p.titre || !p.contenu) { notify('Titre et contenu obligatoires.'); return; }
   if (ME.demo) {
     if (id) {
       const a = ANNONCES.find((x) => x.id === id);
@@ -159,7 +159,7 @@ async function annonceSave(id, p) {
       ANNONCES.unshift({ id: Date.now(), auteur_matricule: ME.matricule, auteur_nom: ME.nom, ...p });
     }
   } else {
-    try { await api(id ? 'annonce_update' : 'annonce_add', id ? { id, ...p } : p); } catch (e) { alert(e.message); return; }
+    try { await api(id ? 'annonce_update' : 'annonce_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
     await reloadAnnonces();
   }
   closeModal();
@@ -175,7 +175,7 @@ async function annonceDelete(id) {
   if (ME.demo) {
     ANNONCES = ANNONCES.filter((x) => x.id !== id);
   } else {
-    try { await api('annonce_delete', { id }); } catch (e) { alert(e.message); return; }
+    try { await api('annonce_delete', { id }); } catch (e) { notify(e.message); return; }
     await reloadAnnonces();
   }
   closeModal();
@@ -251,6 +251,26 @@ function confirmDialog(message, onConfirm, opts = {}) {
   document.getElementById('modalClose').addEventListener('click', closeModal);
   document.getElementById('confirmNo').addEventListener('click', closeModal);
   document.getElementById('confirmYes').addEventListener('click', () => { closeModal(); onConfirm(); });
+}
+
+// Notification stylée (remplace les notify() natives du navigateur)
+function notify(message, type = 'error') {
+  let host = document.getElementById('toastHost');
+  if (!host) { host = document.createElement('div'); host.id = 'toastHost'; host.className = 'toast-host'; document.body.appendChild(host); }
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  const ico = document.createElement('span');
+  ico.className = 'toast-ico';
+  ico.textContent = type === 'success' ? '✓' : type === 'info' ? 'i' : '!';
+  const msg = document.createElement('span');
+  msg.className = 'toast-msg';
+  msg.textContent = message;
+  t.appendChild(ico); t.appendChild(msg);
+  host.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  const close = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 250); };
+  t.addEventListener('click', close);
+  setTimeout(close, 3800);
 }
 
 // Panneau de gauche : barre d'outils fixe + liste filtrable
@@ -455,19 +475,19 @@ function renderTigEditor() {
 async function reloadTig() { try { TIGS = (await api('tig')).tig || []; } catch (e) {} }
 
 async function tigAdd(p) {
-  if (!p.nom) { alert('Le nom est obligatoire.'); return; }
+  if (!p.nom) { notify('Le nom est obligatoire.'); return; }
   if (ME.demo) { TIGS.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, statut: 'EN COURS', ...p }); }
-  else { try { await api('tig_add', p); } catch (e) { alert(e.message); return; } await reloadTig(); }
+  else { try { await api('tig_add', p); } catch (e) { notify(e.message); return; } await reloadTig(); }
   renderTig(); refreshStats('tig');
 }
 async function tigFinish(id) {
   if (ME.demo) { const t = TIGS.find((x) => x.id === id); if (t) t.statut = 'TERMINÉ'; }
-  else { try { await api('tig_finish', { id }); } catch (e) { alert(e.message); return; } await reloadTig(); }
+  else { try { await api('tig_finish', { id }); } catch (e) { notify(e.message); return; } await reloadTig(); }
   renderTig(); refreshStats('tig');
 }
 async function tigDelete(id) {
   if (ME.demo) { TIGS = TIGS.filter((x) => x.id !== id); }
-  else { try { await api('tig_delete', { id }); } catch (e) { alert(e.message); return; } await reloadTig(); }
+  else { try { await api('tig_delete', { id }); } catch (e) { notify(e.message); return; } await reloadTig(); }
   renderTig(); refreshStats('tig');
 }
 
@@ -596,7 +616,7 @@ function renderSaiEditor(s) {
     b.classList.add('is-on');
   }));
   root.querySelector('#saiPhotoInput').addEventListener('change', async (e) => {
-    for (const f of [...e.target.files]) { if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { alert(`Maximum ${MAX_PHOTOS} photos.`); break; } try { EDITOR_PHOTOS.push(await compressImage(f)); } catch (err) {} }
+    for (const f of [...e.target.files]) { if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { notify(`Maximum ${MAX_PHOTOS} photos.`); break; } try { EDITOR_PHOTOS.push(await compressImage(f)); } catch (err) {} }
     e.target.value = '';
     renderEditorThumbs('saiThumbs');
   });
@@ -619,12 +639,12 @@ function renderSaiEditor(s) {
 async function reloadSaisies() { try { SAISIES = (await api('saisies')).saisies || []; } catch (e) {} }
 
 async function saisieSave(id, p) {
-  if (!p.nom) { alert('Le nom est obligatoire.'); return; }
+  if (!p.nom) { notify('Le nom est obligatoire.'); return; }
   if (ME.demo) {
     if (id) { const s = SAISIES.find((x) => x.id === id); if (s) Object.assign(s, p); }
     else SAISIES.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, ...p });
   } else {
-    try { await api(id ? 'saisie_update' : 'saisie_add', id ? { id, ...p } : p); } catch (e) { alert(e.message); return; }
+    try { await api(id ? 'saisie_update' : 'saisie_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
     await reloadSaisies();
   }
   renderSaisies(); refreshStats('saisies');
@@ -632,6 +652,6 @@ async function saisieSave(id, p) {
 
 async function saisieDelete(id) {
   if (ME.demo) { SAISIES = SAISIES.filter((x) => x.id !== id); }
-  else { try { await api('saisie_delete', { id }); } catch (e) { alert(e.message); return; } await reloadSaisies(); }
+  else { try { await api('saisie_delete', { id }); } catch (e) { notify(e.message); return; } await reloadSaisies(); }
   renderSaisies(); refreshStats('saisies');
 }
