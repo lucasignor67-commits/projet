@@ -164,6 +164,7 @@ export default async function handler(req, res) {
         const patch = { nom, grade_id, statut };
         if (body.mot_de_passe) patch.mot_de_passe = String(body.mot_de_passe);
         if (typeof body.formateur !== 'undefined') patch.formateur = !!body.formateur;
+        if (typeof body.recruteur !== 'undefined') patch.recruteur = !!body.recruteur;
         const { error } = await sb().from('comptes').update(patch).eq('matricule', mat);
         if (error) return fail(error.message);
         await sb().from('journal_comptes').insert({ cible_matricule: mat, auteur_matricule: me.matricule, action: 'MODIFICATION', details: 'Modification de ' + nom });
@@ -179,6 +180,52 @@ export default async function handler(req, res) {
         const { error } = await sb().from('comptes').delete().eq('matricule', mat);
         if (error) return fail(error.message);
         await sb().from('journal_comptes').insert({ cible_matricule: mat, auteur_matricule: me.matricule, action: 'SUPPRESSION' });
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Recruteur : contrats de travail + création de recrues ──
+      case 'contrats': {
+        if (!me) return fail('Non authentifié', 401);
+        if (!me.recruteur && !me.peut_ajouter_effectif && !me.peut_modifier_comptes) return fail('Accès refusé', 403);
+        const { data, error } = await sb().from('contrats').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ contrats: data });
+      }
+
+      case 'recruit_add': {
+        if (!me) return fail('Non authentifié', 401);
+        if (!me.recruteur && !me.peut_ajouter_effectif) return fail('Réservé aux recruteurs', 403);
+        const mat = String(body.matricule || '').trim();
+        const nom = String(body.nom || '').trim();
+        const mdp = String(body.mot_de_passe || '');
+        if (!mat || !nom || !mdp) return fail('Matricule, nom et mot de passe obligatoires');
+        // Grade le plus bas (niveau minimum)
+        const { data: low } = await sb().from('grades').select('id').order('niveau', { ascending: true }).limit(1).maybeSingle();
+        if (!low) return fail('Aucun grade disponible');
+        const { error: e1 } = await sb().from('comptes')
+          .insert({ matricule: mat, nom, mot_de_passe: mdp, grade_id: low.id, statut: 'EN TEST' });
+        if (e1) return fail(e1.code === '23505' ? 'Matricule déjà utilisé' : e1.message);
+        const { error: e2 } = await sb().from('contrats').insert({
+          matricule: mat, nom,
+          telephone: String(body.telephone || '').trim() || null,
+          rib: String(body.rib || '').trim() || null,
+          assermentation: String(body.assermentation || '').trim() || null,
+          photo: body.photo || null,
+          cree_par: me.nom, auteur_matricule: me.matricule,
+        });
+        if (e2) return fail(e2.message);
+        await sb().from('journal_comptes').insert({ cible_matricule: mat, auteur_matricule: me.matricule, action: 'CREATION', details: 'Recrutement de ' + nom });
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'contrat_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { data: c } = await sb().from('contrats').select('auteur_matricule').eq('id', id).maybeSingle();
+        if (c && c.auteur_matricule !== me.matricule && me.section !== 'comando' && me.section !== 'direction' && !me.peut_modifier_comptes) return fail('Suppression non autorisée', 403);
+        const { error } = await sb().from('contrats').delete().eq('id', id);
+        if (error) return fail(error.message);
         return res.status(200).json({ ok: true });
       }
 
@@ -201,7 +248,7 @@ export default async function handler(req, res) {
           par: me.nom,
           auteur_matricule: me.matricule,
         };
-        if (!row.nom || !row.motif) return fail('Nom et motif obligatoires');
+        if (!row.nom) return fail('Le nom est obligatoire.');
         const { error } = await sb().from('tig').insert(row);
         if (error) return fail(error.message);
         return res.status(200).json({ ok: true });
