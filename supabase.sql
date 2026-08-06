@@ -321,6 +321,36 @@ CREATE TABLE journal_comptes (
   date_action      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ── 5b. DOCUMENTS (bibliothèque de références) ──────────────────
+CREATE TABLE documents (
+  id               SERIAL PRIMARY KEY,
+  titre            VARCHAR(160),
+  categorie        VARCHAR(60),
+  acces            VARCHAR(16) NOT NULL DEFAULT 'TOUS',
+  contenu          TEXT,
+  lien             TEXT,
+  photos           JSONB DEFAULT '[]'::jsonb,
+  auteur_matricule VARCHAR(6),
+  auteur_nom       VARCHAR(80),
+  date_doc         VARCHAR(40),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── 5c. OPÉRATIONS (registre du commandement) ───────────────────
+CREATE TABLE operations (
+  id               SERIAL PRIMARY KEY,
+  code             VARCHAR(60),
+  objectif         TEXT,
+  responsable      VARCHAR(120),
+  participants     VARCHAR(255),
+  date_op          VARCHAR(40),
+  statut           VARCHAR(12) NOT NULL DEFAULT 'PLANIFIÉE' CHECK (statut IN ('PLANIFIÉE','EN COURS','TERMINÉE')),
+  compte_rendu     TEXT,
+  auteur_matricule VARCHAR(6),
+  auteur_nom       VARCHAR(80),
+  date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ── 6. VUES ─────────────────────────────────────────────────────
 CREATE VIEW v_effectifs AS
 SELECT c.matricule, c.nom, g.nom AS grade, g.section, g.niveau, c.statut, c.actif

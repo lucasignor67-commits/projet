@@ -216,27 +216,16 @@ const PAGES = {
   operations: {
     title: 'OPÉRATIONS',
     desc: 'Opérations en cours et archives du commandement.',
-    kicker: 'Commandement',
-    listTitle: 'REGISTRE DES OPÉRATIONS',
-    addLabel: 'NOUVELLE OPÉRATION',
-    columns: [
-      { key: 'code', label: 'Code' },
-      { key: 'objectif', label: 'Objectif' },
-      { key: 'responsable', label: 'Responsable' },
-      { key: 'date', label: 'Date' },
-      { key: 'statut', label: 'Statut', badge: true, align: 'right' },
-    ],
+    view: 'custom',
+    get data() { return OPERATIONS; },
     stats: (rows) => [
       ['Total', rows.length],
       ['En cours', countBy(rows, 'statut', 'EN COURS')],
       ['Planifiées', countBy(rows, 'statut', 'PLANIFIÉE')],
       ['Terminées', countBy(rows, 'statut', 'TERMINÉE')],
     ],
-    data: [
-      { code: 'OP-ALCATRAZ', objectif: 'Sécurisation du périmètre du camp', responsable: 'El Comandante', date: '25/07/2026', statut: 'PLANIFIÉE' },
-      { code: 'OP-TIBURÓN', objectif: 'Escorte du convoi maritime', responsable: 'Mateo Vargas', date: '22/07/2026', statut: 'EN COURS' },
-      { code: 'OP-JAGUAR', objectif: 'Ratissage des plantations', responsable: 'Lucía Fuentes', date: '12/07/2026', statut: 'TERMINÉE' },
-    ],
+    render: () => `<div id="opRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadOperations(),
   },
 
   absence: {
@@ -814,40 +803,15 @@ const PAGES = {
     title: 'DOCUMENTATION',
     desc: 'Règlement interne, procédures et guides de la milice.',
     view: 'custom',
+    get data() { return DOCUMENTS; },
     stats: (rows) => [
       ['Documents', rows.length],
       ['Accès libre', countBy(rows, 'acces', 'TOUS')],
+      ['Gradés', countBy(rows, 'acces', 'GRADÉS')],
       ['État-major', countBy(rows, 'acces', 'ÉTAT-MAJOR')],
-      ['Catégories', new Set(rows.map((r) => r.categorie)).size],
     ],
-    data: [
-      { titre: 'Règlement interne v2', categorie: 'Règlement', auteur: 'El Comandante', maj: '01/07/2026', acces: 'TOUS' },
-      { titre: "Procédure d'incarcération", categorie: 'Procédure', auteur: 'Mateo Vargas', maj: '05/07/2026', acces: 'TOUS' },
-      { titre: 'Codes radio', categorie: 'Opérationnel', auteur: 'Lucía Fuentes', maj: '12/07/2026', acces: 'GRADÉS' },
-      { titre: 'Plan de défense du camp', categorie: 'Confidentiel', auteur: 'El Comandante', maj: '15/07/2026', acces: 'ÉTAT-MAJOR' },
-    ],
-    render: (cfg) => `
-      <div class="panel-head">
-        <div>
-          <span class="panel-kicker">Références</span>
-          <h2 class="panel-title">DOCUMENTS INTERNES</h2>
-        </div>
-        <span class="panel-count">${cfg.data.length}</span>
-      </div>
-      <div class="doc-list">
-        ${cfg.data.map((d) => `
-          <article class="doc-item">
-            <div class="doc-icon">
-              <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6V2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-            </div>
-            <div class="doc-info">
-              <div class="doc-title">${d.titre}</div>
-              <div class="doc-meta">${d.categorie} &nbsp;·&nbsp; ${d.auteur} &nbsp;·&nbsp; MAJ ${d.maj}</div>
-            </div>
-            ${badge(d.acces)}
-            <button class="btn btn-ghost btn-sm">CONSULTER</button>
-          </article>`).join('')}
-      </div>`,
+    render: () => `<div id="docRoot" class="gestion-root">Chargement…</div>`,
+    afterRender: () => loadDocuments(),
   },
 
   /* ─────────── GESTION DES COMPTES (réservé) ─────────── */

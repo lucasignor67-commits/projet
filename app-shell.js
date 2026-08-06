@@ -22,6 +22,8 @@ let SAISIES = [];        // saisies (page Saisies)
 let ANNONCES = [];       // annonces (page Communications)
 let BLACKLIST = [];      // blacklist (page Blacklist)
 let CONTRATS = [];       // contrats de travail (page Recruteur)
+let DOCUMENTS = [];      // documents (page Documentation)
+let OPERATIONS = [];     // opérations (page Opérations)
 let EDITOR_PHOTOS = [];  // photos (data URLs) de l'élément en cours d'édition (annonce / BL)
 
 // ── Éléments DOM ──

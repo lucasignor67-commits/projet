@@ -255,6 +255,7 @@ function renderRecruteur() {
           <span class="ann-photos-hint">1 image (compressée)</span>
         </div>
         <div class="ann-thumbs" id="recThumb"></div>
+        <div class="form-error" id="recError" hidden></div>
         <div class="dossier-actions">
           <button class="btn btn-primary btn-block" id="recSave">CRÉER LA RECRUE</button>
         </div>
@@ -291,10 +292,23 @@ function renderRecruitThumb() {
 }
 
 async function recruitAdd(p) {
-  if (!p.matricule || !p.nom || !p.mot_de_passe) { notify('Matricule, nom et mot de passe obligatoires.'); return; }
-  if (!p.photo) { notify('La photo du contrat de travail est obligatoire.'); return; }
+  const errBox = document.getElementById('recError');
+  const show = (m) => { if (errBox) { errBox.textContent = m; errBox.hidden = false; } else notify(m); };
+  const required = { recMat: p.matricule, recNom: p.nom, recPwd: p.mot_de_passe };
+  const labels = { recMat: 'Matricule', recNom: 'Nom Prénom', recPwd: 'Mot de passe' };
+  Object.keys(required).forEach((id) => document.getElementById(id)?.classList.remove('field-invalid'));
+  if (errBox) errBox.hidden = true;
+
+  const missing = Object.keys(required).filter((id) => !required[id]);
+  if (missing.length) {
+    missing.forEach((id) => document.getElementById(id)?.classList.add('field-invalid'));
+    show('À remplir : ' + missing.map((id) => labels[id]).join(', ') + '.');
+    return;
+  }
+  if (!p.photo) { show('Ajoutez la photo du contrat de travail.'); return; }
+
   if (ME.demo) {
-    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { notify('Matricule déjà utilisé.'); return; }
+    if (PAGES.effectifs.data.some((e) => e.matricule === p.matricule)) { document.getElementById('recMat')?.classList.add('field-invalid'); show('Matricule déjà utilisé.'); return; }
     const low = [...GRADES].sort((a, b) => a.niveau - b.niveau)[0] || { nom: 'Recluta' };
     PAGES.effectifs.data.push({ matricule: p.matricule, nom: p.nom, grade: low.nom, statut: 'EN TEST' });
     PAGES.effectifs.data.sort(byMatricule);
@@ -302,9 +316,10 @@ async function recruitAdd(p) {
     updateHomeStats();
   } else {
     try { await api('recruit_add', p); await reloadContrats(); await api('effectifs').then((eff) => setEffectifs(eff)); }
-    catch (e) { notify(e.message); return; }
+    catch (e) { show(e.message); return; }
     updateHomeStats();
   }
+  notify('Recrue créée : ' + p.nom + '.', 'success');
   renderRecruteur(); refreshStats('recruteur');
 }
 

@@ -601,6 +601,185 @@ async function formationDelete(id) {
   await loadGestionFormations();
 }
 
+// ── Page Opérations (registre du commandement) ──
+const OP_STATUTS = ['PLANIFIÉE', 'EN COURS', 'TERMINÉE'];
+const opCanManage = () => !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
+
+async function loadOperations() {
+  const root = document.getElementById('opRoot');
+  if (!root) return;
+  try { OPERATIONS = (await api('operations')).operations || []; }
+  catch (e) { root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`; return; }
+  renderOperations();
+  refreshStats('operations');
+}
+
+function renderOperations() {
+  const root = document.getElementById('opRoot');
+  if (!root) return;
+  const canManage = opCanManage();
+
+  const rows = OPERATIONS.map((o) => `
+    <tr class="op-row" data-id="${o.id}">
+      <td class="op-code">${escapeHtml(o.code) || '—'}</td>
+      <td>${escapeHtml(o.objectif) || '—'}</td>
+      <td>${escapeHtml(o.responsable) || '—'}</td>
+      <td>${escapeHtml(o.date_op) || '—'}</td>
+      <td>${badge(o.statut)}</td>
+      <td class="gest-actions">
+        ${canManage && o.statut === 'PLANIFIÉE' ? `<button class="btn btn-ghost btn-sm op-start" data-id="${o.id}">Démarrer</button>` : ''}
+        ${canManage && o.statut === 'EN COURS' ? `<button class="btn btn-ghost btn-sm op-finish" data-id="${o.id}">Terminer</button>` : ''}
+        ${canManage ? `<button class="gest-del op-del" data-id="${o.id}" title="Supprimer">✕</button>` : ''}
+      </td>
+    </tr>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Commandement</span><h2 class="panel-title">REGISTRE DES OPÉRATIONS</h2></div>
+      <div class="map-tools">
+        <span class="panel-count">${OPERATIONS.length}</span>
+        ${canManage ? `<button class="btn btn-primary btn-sm" id="opNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVELLE OPÉRATION</button>` : ''}
+      </div>
+    </div>
+    <div class="filter-row"><div class="search-field"><input type="text" id="opSearch" placeholder="Rechercher une opération…"></div></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Code</th><th>Objectif</th><th>Responsable</th><th>Date</th><th>Statut</th><th class="th-right">Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${OPERATIONS.length ? '' : '<div class="empty-state"><div class="empty-title">AUCUNE OPÉRATION</div><div class="empty-sub">Le commandement peut en créer une avec le bouton ci-dessus.</div></div>'}
+    </div>`;
+
+  if (canManage) root.querySelector('#opNew')?.addEventListener('click', () => openOperationEditor(null));
+  const search = root.querySelector('#opSearch');
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    root.querySelectorAll('.op-row').forEach((el) => {
+      const o = OPERATIONS.find((x) => x.id === +el.dataset.id) || {};
+      const hit = !q || [o.code, o.objectif, o.responsable, o.participants].some((v) => String(v || '').toLowerCase().includes(q));
+      el.style.display = hit ? '' : 'none';
+    });
+  });
+  root.querySelectorAll('.op-row').forEach((tr) => tr.addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    openOperation(+tr.dataset.id);
+  }));
+  root.querySelectorAll('.op-start').forEach((b) => b.addEventListener('click', () => operationSetStatus(+b.dataset.id, 'EN COURS')));
+  root.querySelectorAll('.op-finish').forEach((b) => b.addEventListener('click', () => openOperationClose(+b.dataset.id)));
+  root.querySelectorAll('.op-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement cette opération ?', () => operationDelete(+b.dataset.id))));
+}
+
+function openOperation(id) {
+  const o = OPERATIONS.find((x) => x.id === id);
+  if (!o) return;
+  const canManage = opCanManage();
+  openModal(`
+    <div class="modal-head">
+      <div>
+        <div class="modal-kicker">${escapeHtml(o.code) || '—'} · par ${escapeHtml(o.auteur_nom) || '—'}${o.date_op ? ' · ' + escapeHtml(o.date_op) : ''}</div>
+        <h2 class="modal-title">${escapeHtml(o.objectif) || '—'}</h2>
+      </div>
+      <button class="popup-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-badge">${badge(o.statut)}</div>
+    <div class="bl-info">
+      <div class="bl-info-item"><span>Responsable</span><b>${escapeHtml(o.responsable) || '—'}</b></div>
+      <div class="bl-info-item"><span>Participants</span><b>${escapeHtml(o.participants) || '—'}</b></div>
+      <div class="bl-info-item"><span>Date</span><b>${escapeHtml(o.date_op) || '—'}</b></div>
+    </div>
+    ${o.compte_rendu ? `<div class="modal-sub">Compte-rendu</div><div class="modal-content">${escapeHtml(o.compte_rendu).replace(/\n/g, '<br>')}</div>` : ''}
+    ${canManage ? `<div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="opEdit">MODIFIER</button>
+      <button class="btn btn-danger btn-sm" id="opDel2"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SUPPRIMER</button>
+    </div>` : ''}
+  `);
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  if (canManage) {
+    document.getElementById('opEdit').addEventListener('click', () => openOperationEditor(o));
+    document.getElementById('opDel2').addEventListener('click', () => confirmDialog('Supprimer définitivement cette opération ?', () => operationDelete(o.id)));
+  }
+}
+
+function openOperationEditor(o) {
+  openModal(`
+    <div class="modal-head">
+      <h2 class="modal-title">${o ? "MODIFIER L'OPÉRATION" : 'NOUVELLE OPÉRATION'}</h2>
+      <button class="popup-close" id="modalClose">✕</button>
+    </div>
+    <div class="ann-form">
+      <div class="ann-row">
+        <input class="gest-in" id="opCode" placeholder="Code (ex. OP-JAGUAR)" value="${o ? escapeHtml(o.code || '') : ''}">
+        <select class="gest-in" id="opStatut" style="max-width:180px">${OP_STATUTS.map((s) => `<option${o && o.statut === s ? ' selected' : ''}>${s}</option>`).join('')}</select>
+      </div>
+      <textarea class="gest-in ann-area" id="opObjectif" placeholder="Objectif de l'opération…">${o ? escapeHtml(o.objectif || '') : ''}</textarea>
+      <div class="ann-row">
+        <input class="gest-in" id="opResp" placeholder="Responsable" value="${o ? escapeHtml(o.responsable || '') : ''}">
+        <div class="field-with-bolt"><input class="gest-in" id="opDate" placeholder="Date" value="${o ? escapeHtml(o.date_op || '') : ''}"><button class="bolt-btn" id="opDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button></div>
+      </div>
+      <input class="gest-in" id="opParts" placeholder="Participants (matricules, ex. 12 15 43)" value="${o ? escapeHtml(o.participants || '') : ''}">
+      <div class="modal-sub">Compte-rendu (à remplir à la clôture)</div>
+      <textarea class="gest-in ann-area" id="opCR" placeholder="Compte-rendu de l'opération…">${o ? escapeHtml(o.compte_rendu || '') : ''}</textarea>
+      <button class="btn btn-primary btn-sm" id="opSave">${o ? 'ENREGISTRER' : "CRÉER L'OPÉRATION"}</button>
+    </div>
+  `, 'modal-lg');
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('opDateNow').addEventListener('click', () => { document.getElementById('opDate').value = todayFR(); });
+  document.getElementById('opSave').addEventListener('click', () => {
+    operationSave(o ? o.id : null, {
+      code: document.getElementById('opCode').value.trim(),
+      objectif: document.getElementById('opObjectif').value.trim(),
+      responsable: document.getElementById('opResp').value.trim(),
+      participants: document.getElementById('opParts').value.trim(),
+      date_op: document.getElementById('opDate').value.trim(),
+      statut: document.getElementById('opStatut').value,
+      compte_rendu: document.getElementById('opCR').value.trim(),
+    });
+  });
+}
+
+function openOperationClose(id) {
+  const o = OPERATIONS.find((x) => x.id === id);
+  if (!o) return;
+  openModal(`
+    <div class="modal-head">
+      <h2 class="modal-title">TERMINER — ${escapeHtml(o.code) || 'OPÉRATION'}</h2>
+      <button class="popup-close" id="modalClose">✕</button>
+    </div>
+    <div class="ann-form">
+      <div class="modal-sub">Compte-rendu de clôture</div>
+      <textarea class="gest-in ann-area" id="opCloseCR" placeholder="Ce qui s'est passé, résultat…">${escapeHtml(o.compte_rendu || '')}</textarea>
+      <button class="btn btn-primary btn-sm" id="opCloseSave">MARQUER TERMINÉE</button>
+    </div>
+  `);
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('opCloseSave').addEventListener('click', () => {
+    operationSetStatus(id, 'TERMINÉE', document.getElementById('opCloseCR').value.trim());
+  });
+}
+
+async function reloadOperations() { try { OPERATIONS = (await api('operations')).operations || []; } catch (e) {} }
+
+async function operationSave(id, p) {
+  if (!p.code || !p.objectif) { notify('Code et objectif obligatoires.'); return; }
+  try { await api(id ? 'operation_update' : 'operation_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
+  await reloadOperations();
+  closeModal(); renderOperations(); refreshStats('operations');
+}
+
+async function operationSetStatus(id, statut, compte_rendu) {
+  const body = { id, statut };
+  if (typeof compte_rendu !== 'undefined') body.compte_rendu = compte_rendu;
+  try { await api('operation_status', body); } catch (e) { notify(e.message); return; }
+  await reloadOperations();
+  closeModal(); renderOperations(); refreshStats('operations');
+}
+
+async function operationDelete(id) {
+  try { await api('operation_delete', { id }); } catch (e) { notify(e.message); return; }
+  await reloadOperations();
+  closeModal(); renderOperations(); refreshStats('operations');
+}
+
 // ── Init ──
 async function boot() {
   buildHomeGrid();

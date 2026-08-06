@@ -183,6 +183,156 @@ async function annonceDelete(id) {
   refreshStats('communications');
 }
 
+// ── Page Documentation ──
+const DOC_CATS = ['Règlement', 'Procédure', 'Opérationnel', 'Confidentiel', 'Autre'];
+const DOC_ACCES = ['TOUS', 'GRADÉS', 'ÉTAT-MAJOR'];
+const docCanManage = () => !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
+
+async function loadDocuments() {
+  const root = document.getElementById('docRoot');
+  if (!root) return;
+  try { DOCUMENTS = (await api('documents')).documents || []; }
+  catch (e) { root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`; return; }
+  renderDocuments();
+  refreshStats('documentation');
+}
+
+function renderDocuments() {
+  const root = document.getElementById('docRoot');
+  if (!root) return;
+  const canManage = docCanManage();
+
+  const items = DOCUMENTS.map((d) => `
+    <article class="doc-item" data-id="${d.id}">
+      <div class="doc-icon">
+        <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6V2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="doc-info">
+        <div class="doc-title">${escapeHtml(d.titre) || '—'}</div>
+        <div class="doc-meta">${escapeHtml(d.categorie) || '—'} &nbsp;·&nbsp; ${escapeHtml(d.auteur_nom) || '—'}${d.date_doc ? ' &nbsp;·&nbsp; MAJ ' + escapeHtml(d.date_doc) : ''}${d.lien ? ' &nbsp;·&nbsp; 🔗 lien' : ''}${(d.photos || []).length ? ` &nbsp;·&nbsp; ${d.photos.length} photo(s)` : ''}</div>
+      </div>
+      ${badge(d.acces)}
+      <button class="btn btn-ghost btn-sm doc-open" data-id="${d.id}">CONSULTER</button>
+    </article>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Références</span><h2 class="panel-title">DOCUMENTS INTERNES</h2></div>
+      <div class="map-tools">
+        <span class="panel-count">${DOCUMENTS.length}</span>
+        ${canManage ? `<button class="btn btn-primary btn-sm" id="docNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVEAU DOCUMENT</button>` : ''}
+      </div>
+    </div>
+    <div class="filter-row"><div class="search-field"><input type="text" id="docSearch" placeholder="Rechercher un document…"></div></div>
+    <div class="doc-list" id="docList">
+      ${DOCUMENTS.length ? items : '<div class="empty-state"><div class="empty-title">AUCUN DOCUMENT</div><div class="empty-sub">Aucune référence pour le moment.</div></div>'}
+    </div>`;
+
+  if (canManage) root.querySelector('#docNew')?.addEventListener('click', () => openDocumentEditor(null));
+  const search = root.querySelector('#docSearch');
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    root.querySelectorAll('.doc-item').forEach((el) => {
+      const d = DOCUMENTS.find((x) => x.id === +el.dataset.id) || {};
+      const hit = !q || [d.titre, d.categorie, d.auteur_nom, d.contenu].some((v) => String(v || '').toLowerCase().includes(q));
+      el.style.display = hit ? '' : 'none';
+    });
+  });
+  root.querySelectorAll('.doc-open').forEach((b) => b.addEventListener('click', () => openDocument(+b.dataset.id)));
+}
+
+function openDocument(id) {
+  const d = DOCUMENTS.find((x) => x.id === id);
+  if (!d) return;
+  const canManage = docCanManage();
+  const photos = d.photos || [];
+  const safeLink = /^https?:\/\//i.test(d.lien || '') ? d.lien : '';
+  openModal(`
+    <div class="modal-head">
+      <div>
+        <div class="modal-kicker">${escapeHtml(d.categorie) || '—'} · ${escapeHtml(d.auteur_nom) || '—'}${d.date_doc ? ' · MAJ ' + escapeHtml(d.date_doc) : ''}</div>
+        <h2 class="modal-title">${escapeHtml(d.titre) || '—'}</h2>
+      </div>
+      <button class="popup-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-badge">${badge(d.acces)}</div>
+    ${d.contenu ? `<div class="modal-content">${escapeHtml(d.contenu).replace(/\n/g, '<br>')}</div>` : ''}
+    ${safeLink ? `<a class="doc-link-btn" href="${safeLink.replace(/"/g, '&quot;')}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Ouvrir le lien externe</a>` : ''}
+    ${photos.length ? `<div class="comm-photos">${photos.map((p) => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" alt=""></a>`).join('')}</div>` : ''}
+    ${canManage ? `<div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="docEdit">MODIFIER</button>
+      <button class="btn btn-danger btn-sm" id="docDel"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SUPPRIMER</button>
+    </div>` : ''}
+  `);
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  if (canManage) {
+    document.getElementById('docEdit').addEventListener('click', () => openDocumentEditor(d));
+    document.getElementById('docDel').addEventListener('click', () => confirmDialog('Supprimer définitivement ce document ?', () => documentDelete(d.id)));
+  }
+}
+
+function openDocumentEditor(d) {
+  EDITOR_PHOTOS = d && d.photos ? [...d.photos] : [];
+  openModal(`
+    <div class="modal-head">
+      <h2 class="modal-title">${d ? 'MODIFIER LE DOCUMENT' : 'NOUVEAU DOCUMENT'}</h2>
+      <button class="popup-close" id="modalClose">✕</button>
+    </div>
+    <div class="ann-form">
+      <input class="gest-in" id="docTitre" placeholder="Titre du document" value="${d ? escapeHtml(d.titre || '') : ''}">
+      <div class="ann-row">
+        <select class="gest-in" id="docCat">${DOC_CATS.map((c) => `<option${d && d.categorie === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        <select class="gest-in" id="docAcces">${DOC_ACCES.map((a) => `<option${d && d.acces === a ? ' selected' : ''}>${a}</option>`).join('')}</select>
+        <div class="field-with-bolt"><input class="gest-in" id="docDate" placeholder="Date / MAJ" value="${d ? escapeHtml(d.date_doc || '') : ''}"><button class="bolt-btn" id="docDateNow" type="button" title="Aujourd'hui"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg></button></div>
+      </div>
+      <input class="gest-in" id="docLien" placeholder="Lien externe (optionnel — https://…)" value="${d ? (d.lien || '').replace(/"/g, '&quot;') : ''}">
+      <textarea class="gest-in ann-area" id="docContenu" placeholder="Contenu du document…">${d ? escapeHtml(d.contenu || '') : ''}</textarea>
+      <div class="ann-photos-bar">
+        <label class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="2"/><path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/></svg>AJOUTER DES PHOTOS<input type="file" id="docPhotoInput" accept="image/*" multiple hidden></label>
+        <span class="ann-photos-hint">Max ${MAX_PHOTOS} · compressées</span>
+      </div>
+      <div class="ann-thumbs" id="docThumbs"></div>
+      <button class="btn btn-primary btn-sm" id="docSave">${d ? 'ENREGISTRER' : 'PUBLIER LE DOCUMENT'}</button>
+    </div>
+  `);
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('docDateNow').addEventListener('click', () => { document.getElementById('docDate').value = todayFR(); });
+  renderEditorThumbs('docThumbs');
+  document.getElementById('docPhotoInput').addEventListener('change', async (e) => {
+    for (const f of [...e.target.files]) { if (EDITOR_PHOTOS.length >= MAX_PHOTOS) { notify(`Maximum ${MAX_PHOTOS} photos.`); break; } try { EDITOR_PHOTOS.push(await compressImage(f)); } catch (err) {} }
+    e.target.value = '';
+    renderEditorThumbs('docThumbs');
+  });
+  document.getElementById('docSave').addEventListener('click', () => {
+    let lien = document.getElementById('docLien').value.trim();
+    if (lien && !/^https?:\/\//i.test(lien)) lien = 'https://' + lien;
+    documentSave(d ? d.id : null, {
+      titre: document.getElementById('docTitre').value.trim(),
+      categorie: document.getElementById('docCat').value,
+      acces: document.getElementById('docAcces').value,
+      date_doc: document.getElementById('docDate').value.trim(),
+      lien,
+      contenu: document.getElementById('docContenu').value.trim(),
+      photos: EDITOR_PHOTOS,
+    });
+  });
+}
+
+async function reloadDocuments() { try { DOCUMENTS = (await api('documents')).documents || []; } catch (e) {} }
+
+async function documentSave(id, p) {
+  if (!p.titre) { notify('Le titre est obligatoire.'); return; }
+  try { await api(id ? 'document_update' : 'document_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
+  await reloadDocuments();
+  closeModal(); renderDocuments(); refreshStats('documentation');
+}
+
+async function documentDelete(id) {
+  try { await api('document_delete', { id }); } catch (e) { notify(e.message); return; }
+  await reloadDocuments();
+  closeModal(); renderDocuments(); refreshStats('documentation');
+}
+
 // ══════════════════════════════════════════════════════════════
 //  DOSSIER D'AMENDE — grille cherchable (gauche) + panier (droite)
 //  Composant partagé par les pages TIG et Saisies
