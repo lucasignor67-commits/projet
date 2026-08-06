@@ -589,6 +589,17 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      case 'operation_plan': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const plan = (body.plan && typeof body.plan === 'object') ? body.plan : {};
+        const { error } = await sb().from('operations').update({ plan }).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Sanctions (encodage réservé Commandement / Direction) ──
       case 'sanctions': {
         if (!me) return fail('Non authentifié', 401);
