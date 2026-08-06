@@ -453,6 +453,142 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Documentation (lecture selon l'accès, écriture réservée Commandement / Direction) ──
+      case 'documents': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('documents').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        const major = me.section === 'comando' || me.section === 'direction';
+        const grade = major || me.section === 'liderazgo';
+        const visible = (data || []).filter((d) => d.acces === 'TOUS' || (d.acces === 'GRADÉS' && grade) || (d.acces === 'ÉTAT-MAJOR' && major));
+        return res.status(200).json({ documents: visible, canManage: major });
+      }
+
+      case 'document_add': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const ACCES = ['TOUS', 'GRADÉS', 'ÉTAT-MAJOR'];
+        const row = {
+          titre: String(body.titre || '').trim() || null,
+          categorie: String(body.categorie || '').trim() || null,
+          acces: ACCES.includes(body.acces) ? body.acces : 'TOUS',
+          contenu: String(body.contenu || '').trim() || null,
+          lien: String(body.lien || '').trim() || null,
+          photos: Array.isArray(body.photos) ? body.photos.slice(0, 4) : [],
+          date_doc: String(body.date_doc || '').trim() || null,
+          auteur_matricule: me.matricule,
+          auteur_nom: me.nom,
+        };
+        if (!row.titre) return fail('Le titre est obligatoire');
+        const { error } = await sb().from('documents').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'document_update': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const ACCES = ['TOUS', 'GRADÉS', 'ÉTAT-MAJOR'];
+        const patch = {
+          titre: String(body.titre || '').trim() || null,
+          categorie: String(body.categorie || '').trim() || null,
+          acces: ACCES.includes(body.acces) ? body.acces : 'TOUS',
+          contenu: String(body.contenu || '').trim() || null,
+          lien: String(body.lien || '').trim() || null,
+          photos: Array.isArray(body.photos) ? body.photos.slice(0, 4) : [],
+          date_doc: String(body.date_doc || '').trim() || null,
+        };
+        if (!patch.titre) return fail('Le titre est obligatoire');
+        const { error } = await sb().from('documents').update(patch).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'document_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('documents').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Opérations (lecture pour tous, écriture réservée Commandement / Direction) ──
+      case 'operations': {
+        if (!me) return fail('Non authentifié', 401);
+        const { data, error } = await sb().from('operations').select('*').order('id', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ operations: data, canManage: me.section === 'comando' || me.section === 'direction' });
+      }
+
+      case 'operation_add': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const STA = ['PLANIFIÉE', 'EN COURS', 'TERMINÉE'];
+        const row = {
+          code: String(body.code || '').trim() || null,
+          objectif: String(body.objectif || '').trim() || null,
+          responsable: String(body.responsable || '').trim() || null,
+          participants: String(body.participants || '').trim() || null,
+          date_op: String(body.date_op || '').trim() || null,
+          statut: STA.includes(body.statut) ? body.statut : 'PLANIFIÉE',
+          compte_rendu: String(body.compte_rendu || '').trim() || null,
+          auteur_matricule: me.matricule,
+          auteur_nom: me.nom,
+        };
+        if (!row.code || !row.objectif) return fail('Code et objectif obligatoires');
+        const { error } = await sb().from('operations').insert(row);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'operation_update': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const STA = ['PLANIFIÉE', 'EN COURS', 'TERMINÉE'];
+        const patch = {
+          code: String(body.code || '').trim() || null,
+          objectif: String(body.objectif || '').trim() || null,
+          responsable: String(body.responsable || '').trim() || null,
+          participants: String(body.participants || '').trim() || null,
+          date_op: String(body.date_op || '').trim() || null,
+          statut: STA.includes(body.statut) ? body.statut : 'PLANIFIÉE',
+          compte_rendu: String(body.compte_rendu || '').trim() || null,
+        };
+        if (!patch.code || !patch.objectif) return fail('Code et objectif obligatoires');
+        const { error } = await sb().from('operations').update(patch).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'operation_status': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        const STA = ['PLANIFIÉE', 'EN COURS', 'TERMINÉE'];
+        if (!id || !STA.includes(body.statut)) return fail('Paramètres invalides');
+        const patch = { statut: body.statut };
+        if (typeof body.compte_rendu !== 'undefined') patch.compte_rendu = String(body.compte_rendu || '').trim() || null;
+        const { error } = await sb().from('operations').update(patch).eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'operation_delete': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const id = Number(body.id || 0);
+        if (!id) return fail('id manquant');
+        const { error } = await sb().from('operations').delete().eq('id', id);
+        if (error) return fail(error.message);
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Sanctions (encodage réservé Commandement / Direction) ──
       case 'sanctions': {
         if (!me) return fail('Non authentifié', 401);
