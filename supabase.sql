@@ -346,6 +346,7 @@ CREATE TABLE operations (
   date_op          VARCHAR(40),
   statut           VARCHAR(12) NOT NULL DEFAULT 'PLANIFIÉE' CHECK (statut IN ('PLANIFIÉE','EN COURS','TERMINÉE')),
   compte_rendu     TEXT,
+  plan             JSONB DEFAULT '{}'::jsonb,
   auteur_matricule VARCHAR(6),
   auteur_nom       VARCHAR(80),
   date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()

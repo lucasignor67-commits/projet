@@ -627,6 +627,7 @@ function renderOperations() {
       <td>${escapeHtml(o.date_op) || '—'}</td>
       <td>${badge(o.statut)}</td>
       <td class="gest-actions">
+        <button class="btn btn-ghost btn-sm op-plan" data-id="${o.id}">🗺 Plan</button>
         ${canManage && o.statut === 'PLANIFIÉE' ? `<button class="btn btn-ghost btn-sm op-start" data-id="${o.id}">Démarrer</button>` : ''}
         ${canManage && o.statut === 'EN COURS' ? `<button class="btn btn-ghost btn-sm op-finish" data-id="${o.id}">Terminer</button>` : ''}
         ${canManage ? `<button class="gest-del op-del" data-id="${o.id}" title="Supprimer">✕</button>` : ''}
@@ -664,6 +665,7 @@ function renderOperations() {
     if (e.target.closest('button')) return;
     openOperation(+tr.dataset.id);
   }));
+  root.querySelectorAll('.op-plan').forEach((b) => b.addEventListener('click', () => { const o = OPERATIONS.find((x) => x.id === +b.dataset.id); if (o) renderOperationPlanner(o); }));
   root.querySelectorAll('.op-start').forEach((b) => b.addEventListener('click', () => operationSetStatus(+b.dataset.id, 'EN COURS')));
   root.querySelectorAll('.op-finish').forEach((b) => b.addEventListener('click', () => openOperationClose(+b.dataset.id)));
   root.querySelectorAll('.op-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement cette opération ?', () => operationDelete(+b.dataset.id))));
@@ -688,12 +690,14 @@ function openOperation(id) {
       <div class="bl-info-item"><span>Date</span><b>${escapeHtml(o.date_op) || '—'}</b></div>
     </div>
     ${o.compte_rendu ? `<div class="modal-sub">Compte-rendu</div><div class="modal-content">${escapeHtml(o.compte_rendu).replace(/\n/g, '<br>')}</div>` : ''}
+    <button class="btn btn-ghost btn-sm" id="opPlanBtn" style="margin-top:14px">🗺 PLAN TACTIQUE</button>
     ${canManage ? `<div class="modal-actions">
       <button class="btn btn-ghost btn-sm" id="opEdit">MODIFIER</button>
       <button class="btn btn-danger btn-sm" id="opDel2"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SUPPRIMER</button>
     </div>` : ''}
   `);
   document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('opPlanBtn').addEventListener('click', () => { closeModal(); renderOperationPlanner(o); });
   if (canManage) {
     document.getElementById('opEdit').addEventListener('click', () => openOperationEditor(o));
     document.getElementById('opDel2').addEventListener('click', () => confirmDialog('Supprimer définitivement cette opération ?', () => operationDelete(o.id)));
@@ -778,6 +782,136 @@ async function operationDelete(id) {
   try { await api('operation_delete', { id }); } catch (e) { notify(e.message); return; }
   await reloadOperations();
   closeModal(); renderOperations(); refreshStats('operations');
+}
+
+// ── Planificateur tactique d'une opération (carte + marqueurs par équipe) ──
+const OP_TEAMS = [['alpha', 'Alpha'], ['bravo', 'Bravo'], ['charlie', 'Charlie'], ['delta', 'Delta']];
+const OP_MARKERS = [
+  ['objectif', 'Objectif', '★'], ['extraction', 'Extraction', '⬆'], ['insertion', 'Insertion', '⬇'],
+  ['patrol', 'Patrouille', '↻'], ['checkpoint', 'Checkpoint', '◆'], ['nofly', 'No-fly', '⊘'],
+  ['heli', 'Hélico', '🚁'], ['boat', 'Bateau', '⚓'], ['tireur', 'Tireur', '🎯'],
+  ['vehicle', 'Véhicule', '🚗'], ['plane', 'Avion', '✈'], ['note', 'Annotation', '📌'],
+];
+const OP_MARK_ICON = Object.fromEntries(OP_MARKERS.map(([id, , ic]) => [id, ic]));
+let PLAN_MARKERS = [];
+let PLAN_TOOL = 'select';
+let PLAN_TEAM = 'alpha';
+let PLAN_OP_ID = null;
+let PLAN_SEL = null;
+let _planId = 0;
+
+function renderOperationPlanner(op) {
+  const root = document.getElementById('opRoot');
+  if (!root) return;
+  const canManage = opCanManage();
+  PLAN_OP_ID = op.id;
+  PLAN_MARKERS = ((op.plan && op.plan.markers) || []).map((m) => ({ ...m }));
+  PLAN_TOOL = 'select'; PLAN_TEAM = 'alpha'; PLAN_SEL = null;
+  _planId = PLAN_MARKERS.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
+
+  const teamBtns = OP_TEAMS.map(([id, lbl]) => `<button class="plan-team team-${id}${id === PLAN_TEAM ? ' on' : ''}" data-team="${id}" type="button">${lbl}</button>`).join('');
+  const toolBtns = OP_MARKERS.map(([id, lbl, ic]) => `<button class="plan-tool" data-tool="${id}" type="button" title="${lbl}"><span>${ic}</span></button>`).join('');
+
+  root.innerHTML = `
+    <div class="panel-head" style="margin-bottom:12px">
+      <div><span class="panel-kicker">Plan tactique</span><h2 class="panel-title">${escapeHtml(op.code) || 'OPÉRATION'}</h2></div>
+      <div class="map-tools">
+        <button class="btn btn-ghost btn-sm" id="planBack" type="button">← Retour</button>
+        ${canManage ? '<button class="btn btn-primary btn-sm" id="planSave" type="button">Enregistrer le plan</button>' : ''}
+      </div>
+    </div>
+    ${canManage ? `
+    <div class="planner-toolbar">
+      <div class="plan-group"><span class="plan-lbl">Équipe</span>${teamBtns}</div>
+      <div class="plan-group"><span class="plan-lbl">Outils</span>
+        <button class="plan-tool on" data-tool="select" type="button" title="Sélectionner / déplacer"><span>➤</span></button>
+        ${toolBtns}
+      </div>
+      <button class="btn btn-ghost btn-sm" id="planDel" type="button">✕ Supprimer sélection</button>
+    </div>` : '<div class="map-note-bar">Plan en lecture seule — seul le commandement peut le modifier.</div>'}
+    <div class="map-wrap planner-map" id="plannerMap">
+      <img class="map-img" src="map.jpg" alt="Carte de Cayo Perico" onerror="this.closest('.map-wrap').classList.add('map-missing')">
+      <div class="map-placeholder"><div class="empty-title">CARTE INDISPONIBLE</div><div class="empty-sub">Ajoutez l'image map.jpg.</div></div>
+    </div>`;
+
+  root.querySelector('#planBack').addEventListener('click', () => renderOperations());
+  if (canManage) {
+    root.querySelector('#planSave').addEventListener('click', () => operationSavePlan(PLAN_OP_ID, { markers: PLAN_MARKERS }));
+    root.querySelector('#planDel').addEventListener('click', () => {
+      if (PLAN_SEL == null) { notify('Sélectionnez d\'abord un marqueur (outil ➤).'); return; }
+      PLAN_MARKERS = PLAN_MARKERS.filter((m) => m.id !== PLAN_SEL); PLAN_SEL = null; renderPlanMarkers();
+    });
+    root.querySelectorAll('.plan-team').forEach((b) => b.addEventListener('click', () => {
+      PLAN_TEAM = b.dataset.team;
+      root.querySelectorAll('.plan-team').forEach((x) => x.classList.remove('on'));
+      b.classList.add('on');
+    }));
+    root.querySelectorAll('.plan-tool').forEach((b) => b.addEventListener('click', () => {
+      PLAN_TOOL = b.dataset.tool;
+      root.querySelectorAll('.plan-tool').forEach((x) => x.classList.remove('on'));
+      b.classList.add('on');
+    }));
+    const map = root.querySelector('#plannerMap');
+    map.addEventListener('click', (e) => {
+      if (PLAN_TOOL === 'select' || e.target.closest('.plan-marker')) return;
+      const r = map.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width) * 100;
+      const y = ((e.clientY - r.top) / r.height) * 100;
+      const label = PLAN_TOOL === 'note' ? (prompt("Texte de l'annotation :") || '') : '';
+      PLAN_MARKERS.push({ id: ++_planId, type: PLAN_TOOL, team: PLAN_TEAM, x: +x.toFixed(2), y: +y.toFixed(2), label });
+      renderPlanMarkers();
+    });
+  }
+  renderPlanMarkers();
+}
+
+function renderPlanMarkers() {
+  const map = document.getElementById('plannerMap');
+  if (!map) return;
+  const canManage = opCanManage();
+  map.querySelectorAll('.plan-marker').forEach((el) => el.remove());
+  PLAN_MARKERS.forEach((m) => {
+    const el = document.createElement('div');
+    el.className = `plan-marker team-${m.team}${PLAN_SEL === m.id ? ' sel' : ''}`;
+    el.style.left = m.x + '%'; el.style.top = m.y + '%';
+    el.dataset.id = m.id;
+    el.innerHTML = `<span class="pm-ico">${OP_MARK_ICON[m.type] || '•'}</span>${m.label ? `<span class="pm-lbl">${escapeHtml(m.label)}</span>` : ''}`;
+    map.appendChild(el);
+    if (canManage) attachPlanDrag(el, m, map);
+  });
+}
+
+function attachPlanDrag(el, m, map) {
+  el.addEventListener('pointerdown', (e) => {
+    if (PLAN_TOOL !== 'select') return;
+    e.stopPropagation();
+    let moved = false;
+    const sx = e.clientX, sy = e.clientY;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      if (Math.abs(ev.clientX - sx) > 2 || Math.abs(ev.clientY - sy) > 2) moved = true;
+      const r = map.getBoundingClientRect();
+      m.x = Math.max(0, Math.min(100, ((ev.clientX - r.left) / r.width) * 100));
+      m.y = Math.max(0, Math.min(100, ((ev.clientY - r.top) / r.height) * 100));
+      el.style.left = m.x + '%'; el.style.top = m.y + '%';
+    };
+    const up = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      m.x = +m.x.toFixed(2); m.y = +m.y.toFixed(2);
+      if (!moved) { PLAN_SEL = (PLAN_SEL === m.id ? null : m.id); renderPlanMarkers(); }
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+  });
+}
+
+async function operationSavePlan(id, plan) {
+  try { await api('operation_plan', { id, plan }); } catch (e) { notify(e.message); return; }
+  await reloadOperations();
+  notify('Plan tactique enregistré.', 'success');
+  const op = OPERATIONS.find((x) => x.id === id);
+  if (op) renderOperationPlanner(op); else renderOperations();
 }
 
 // ── Init ──

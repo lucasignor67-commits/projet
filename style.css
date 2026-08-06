@@ -2394,3 +2394,55 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 .op-row { cursor: pointer; }
 .op-row:hover { background: var(--bg-hover); }
 .op-code { font-family: var(--font-mono); font-size: 12px; color: var(--green-300); white-space: nowrap; }
+
+/* ═══════════════ PLANIFICATEUR TACTIQUE (Opérations) ═══════════════ */
+.planner-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+  padding: 10px 12px; margin-bottom: 12px;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.plan-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.plan-lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-low); margin-right: 2px; }
+.plan-team {
+  height: 30px; padding: 0 12px; cursor: pointer; border-radius: var(--radius-sm);
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--text-mid);
+}
+.plan-team.on { color: #071007; }
+.plan-team.team-alpha.on { background: #4ade80; border-color: #4ade80; }
+.plan-team.team-bravo.on { background: #4e96e8; border-color: #4e96e8; color: #fff; }
+.plan-team.team-charlie.on { background: #f59e0b; border-color: #f59e0b; }
+.plan-team.team-delta.on { background: #ef4444; border-color: #ef4444; color: #fff; }
+.plan-tool {
+  width: 34px; height: 30px; cursor: pointer; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 15px;
+  background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-hi);
+}
+.plan-tool:hover { border-color: var(--border-strong); }
+.plan-tool.on { background: rgba(34, 197, 94, 0.22); border-color: var(--border-strong); }
+.map-note-bar { font-family: var(--font-mono); font-size: 10px; color: var(--text-low); margin-bottom: 10px; }
+.planner-map { cursor: crosshair; }
+.map-wrap.map-missing .plan-marker { display: none; }
+
+.plan-marker {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  cursor: grab; touch-action: none; z-index: 2;
+}
+.plan-marker.sel { z-index: 5; }
+.plan-marker .pm-ico {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 14px; line-height: 1;
+  background: rgba(6, 17, 15, 0.85); border: 2px solid var(--pm-color, #4ade80);
+  color: var(--pm-color, #4ade80); box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+}
+.plan-marker.sel .pm-ico { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.8), 0 0 10px var(--pm-color); }
+.plan-marker .pm-lbl {
+  font-family: var(--font-mono); font-size: 9px; color: var(--text-hi);
+  background: rgba(6, 17, 15, 0.8); padding: 1px 5px; border-radius: 4px;
+  white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+}
+.plan-marker.team-alpha { --pm-color: #4ade80; }
+.plan-marker.team-bravo { --pm-color: #4e96e8; }
+.plan-marker.team-charlie { --pm-color: #f59e0b; }
+.plan-marker.team-delta { --pm-color: #ef4444; }
