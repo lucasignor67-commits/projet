@@ -842,6 +842,15 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      case 'presence_kick': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
+        const mat = String(body.matricule || '').trim();
+        if (!mat) return fail('Matricule manquant');
+        await sb().from('presence').delete().eq('compte_matricule', mat);
+        return res.status(200).json({ ok: true });
+      }
+
       default:
         return fail('Action inconnue : ' + action, 404);
     }
