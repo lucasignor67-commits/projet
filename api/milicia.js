@@ -711,6 +711,9 @@ export default async function handler(req, res) {
       // ── Patrouilles ──
       case 'patrouilles': {
         if (!me) return fail('Non authentifié', 401);
+        // Purge automatique : suppression des patrouilles de plus de 8 jours
+        const limite8j = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+        await sb().from('patrouilles').delete().lt('date_creation', limite8j);
         const { data, error } = await sb().from('patrouilles').select('*').order('id', { ascending: false });
         if (error) throw error;
         return res.status(200).json({ patrouilles: data });
@@ -738,6 +741,13 @@ export default async function handler(req, res) {
         const id = Number(body.id || 0);
         const fin = String(body.fin || '').trim();
         if (!id) return fail('id manquant');
+        // Durée réelle = maintenant − date de création ; < 3 min → non enregistrée
+        const { data: rows } = await sb().from('patrouilles').select('date_creation').eq('id', id).limit(1);
+        const pat = rows && rows[0];
+        if (pat && pat.date_creation && (Date.now() - new Date(pat.date_creation).getTime()) < 3 * 60 * 1000) {
+          await sb().from('patrouilles').delete().eq('id', id);
+          return res.status(200).json({ ok: true, discarded: true });
+        }
         const { error } = await sb().from('patrouilles').update({ fin, statut: 'TERMINÉE' }).eq('id', id);
         if (error) return fail(error.message);
         return res.status(200).json({ ok: true });
