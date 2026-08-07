@@ -994,6 +994,14 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   background: linear-gradient(145deg, rgba(74, 222, 128, 0.16), rgba(74, 222, 128, 0.04));
 }
 
+.chip-kick {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; margin-left: 2px; padding: 0;
+  border: none; border-radius: 50%; cursor: pointer;
+  background: rgba(239, 68, 68, 0.14); color: #fca5a5; font-size: 10px; line-height: 1;
+}
+.chip-kick:hover { background: var(--danger); color: #fff; }
+
 .presence-empty {
   font-family: var(--font-mono);
   font-size: 11px;

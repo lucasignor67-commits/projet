@@ -82,6 +82,19 @@ async function togglePost(nom) {
   await loadPresence(); // le temps réel rafraîchira aussi les autres
 }
 
+// Retire quelqu'un de son poste (réservé Commandement / Direction)
+async function kickPost(mat) {
+  if (!ME || (ME.section !== 'comando' && ME.section !== 'direction')) return;
+  if (ME.demo) {
+    delete PRESENCE[mat];
+    try { localStorage.setItem(DEMO_POSTS_KEY, JSON.stringify(PRESENCE)); } catch (e) {}
+    if (currentPage === 'carte') rerenderCarte();
+    return;
+  }
+  try { await api('presence_kick', { matricule: mat }); } catch (e) { notify(e.message); return; }
+  await loadPresence();
+}
+
 // Re-rendu de la carte (après changement de présence)
 function rerenderCarte() {
   if (currentPage !== 'carte') return;
@@ -411,7 +424,7 @@ const PAGES = {
             <div class="popup-sub">À ce poste</div>
             <div class="popup-people">
               ${occ.length
-                ? occ.map((mat) => `<span class="op-chip${mat === me ? ' me' : ''}"><b>${mat}</b> ${memberName(mat)}</span>`).join('')
+                ? occ.map((mat) => `<span class="op-chip${mat === me ? ' me' : ''}"><b>${mat}</b> ${memberName(mat)}${(ME && (ME.section === 'comando' || ME.section === 'direction')) ? `<button class="chip-kick" data-mat="${mat}" title="Retirer du poste">✕</button>` : ''}</span>`).join('')
                 : '<span class="presence-empty">Personne à ce poste</span>'}
             </div>
           </div>`;
@@ -447,7 +460,7 @@ const PAGES = {
             <span class="presence-name">${z.nom}</span>
             <span class="presence-people">
               ${occ.length
-                ? occ.map((mat) => `<span class="op-chip${mat === me ? ' me' : ''}"><b>${mat}</b> ${memberName(mat)}</span>`).join('')
+                ? occ.map((mat) => `<span class="op-chip${mat === me ? ' me' : ''}"><b>${mat}</b> ${memberName(mat)}${(ME && (ME.section === 'comando' || ME.section === 'direction')) ? `<button class="chip-kick" data-mat="${mat}" title="Retirer du poste">✕</button>` : ''}</span>`).join('')
                 : '<span class="presence-empty">personne</span>'}
             </span>
           </div>`;
@@ -509,6 +522,12 @@ const PAGES = {
       host.querySelector('#popupToggle')?.addEventListener('click', () => {
         if (cfg._openPoint) togglePost(cfg._openPoint);
       });
+
+      // Retirer un occupant de son poste (Commandement / Direction)
+      host.querySelectorAll('.chip-kick').forEach((b) => b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        confirmDialog(`Retirer le matricule ${b.dataset.mat} de son poste ?`, () => kickPost(b.dataset.mat));
+      }));
 
       // ── Éditeur de points (nom + statut + suppression) ──
       ptEditor.innerHTML = cfg.data
