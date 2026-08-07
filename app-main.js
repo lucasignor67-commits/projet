@@ -139,9 +139,12 @@ async function loadRapports() {
 
 function escapeHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+let RAP_CREATING = false; // true = affiche le formulaire de rédaction, false = liste des rapports
+
 function renderRapports() {
   const root = document.getElementById('rapRoot');
   if (!root) return;
+  if (RAP_CREATING) { renderRapForm(); return; }
   // Seuls le Commandement (comando) et la Direction (direction) peuvent supprimer
   const canDel = !!(ME && (ME.section === 'comando' || ME.section === 'direction'));
 
@@ -164,7 +167,28 @@ function renderRapports() {
 
   root.innerHTML = `
     <div class="panel-head">
+      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">RAPPORTS</h2></div>
+      <div class="map-tools">
+        <span class="panel-count">${RAPPORTS.length}</span>
+        <button class="btn btn-primary btn-sm" id="rapNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVEAU RAPPORT</button>
+      </div>
+    </div>
+    ${RAPPORTS.length ? `<div class="rap-grid">${cards}</div>`
+      : '<div class="empty-state"><div class="empty-title">AUCUN RAPPORT</div><div class="empty-sub">Rédigez-en un avec le bouton « Nouveau rapport ».</div></div>'}`;
+
+  root.querySelector('#rapNew').addEventListener('click', () => { RAP_CREATING = true; renderRapports(); });
+  root.querySelectorAll('.rap-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement ce rapport ?', () => rapportDelete(+b.dataset.id))));
+}
+
+// Vue formulaire : rédaction d'un nouveau rapport
+function renderRapForm() {
+  const root = document.getElementById('rapRoot');
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="panel-head">
       <div><span class="panel-kicker">Nouveau</span><h2 class="panel-title">RÉDIGER UN RAPPORT</h2></div>
+      <button class="btn btn-ghost btn-sm" id="rapBack" type="button">← Retour aux rapports</button>
     </div>
     <div class="rap-form">
       <label class="rap-field">
@@ -193,15 +217,9 @@ function renderRapports() {
         <textarea class="gest-in rap-area" id="rapNote" placeholder="Facultatif"></textarea>
       </label>
       <button class="btn btn-primary btn-sm" id="rapAddBtn">ENREGISTRER LE RAPPORT</button>
-    </div>
+    </div>`;
 
-    <div class="panel-head" style="margin-top:20px">
-      <div><span class="panel-kicker">Registre</span><h2 class="panel-title">RAPPORTS</h2></div>
-      <span class="panel-count">${RAPPORTS.length}</span>
-    </div>
-    ${RAPPORTS.length ? `<div class="rap-grid">${cards}</div>`
-      : '<div class="empty-state"><div class="empty-title">AUCUN RAPPORT</div><div class="empty-sub">Rédigez-en un avec le formulaire ci-dessus.</div></div>'}`;
-
+  root.querySelector('#rapBack').addEventListener('click', () => { RAP_CREATING = false; renderRapports(); });
   root.querySelector('#rapDateNow').addEventListener('click', () => { root.querySelector('#rapDate').value = todayFR(); });
   root.querySelector('#rapAddBtn').addEventListener('click', () => {
     rapportAdd({
@@ -212,7 +230,6 @@ function renderRapports() {
       note: root.querySelector('#rapNote').value.trim(),
     });
   });
-  root.querySelectorAll('.rap-del').forEach((b) => b.addEventListener('click', () => confirmDialog('Supprimer définitivement ce rapport ?', () => rapportDelete(+b.dataset.id))));
 }
 
 async function reloadRapports() {
@@ -230,6 +247,7 @@ async function rapportAdd(p) {
     try { await api('rapport_add', p); } catch (e) { notify(e.message); return; }
     await reloadRapports();
   }
+  RAP_CREATING = false; // retour à la liste après enregistrement
   renderRapports();
   refreshStats('rapports');
 }
@@ -361,6 +379,11 @@ async function loadPatrouilles() {
   if (!root) return;
   try {
     if (!ME.demo) PATROUILLES = (await api('patrouilles')).patrouilles || [];
+    else {
+      // Purge démo : patrouilles de plus de 8 jours (id = Date.now() à la création)
+      const limite8j = Date.now() - 8 * 24 * 60 * 60 * 1000;
+      PATROUILLES = PATROUILLES.filter((p) => !p.id || p.id >= limite8j);
+    }
   } catch (e) {
     root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`;
     return;
@@ -453,9 +476,19 @@ async function patrouilleFinish(id) {
   const fin = nowHM();
   if (ME.demo) {
     const p = PATROUILLES.find((x) => x.id === id);
-    if (p) { p.fin = fin; p.statut = 'TERMINÉE'; }
+    if (p) {
+      // En démo, l'id vaut Date.now() à la création → durée = maintenant − id
+      if (Date.now() - id < 3 * 60 * 1000) {
+        PATROUILLES = PATROUILLES.filter((x) => x.id !== id);
+        notify('Patrouille de moins de 3 minutes : non enregistrée.');
+      } else {
+        p.fin = fin; p.statut = 'TERMINÉE';
+      }
+    }
   } else {
-    try { await api('patrouille_finish', { id, fin }); } catch (e) { notify(e.message); return; }
+    let r;
+    try { r = await api('patrouille_finish', { id, fin }); } catch (e) { notify(e.message); return; }
+    if (r && r.discarded) notify('Patrouille de moins de 3 minutes : non enregistrée.');
     await reloadPatrouilles();
   }
   renderPatrouilles();

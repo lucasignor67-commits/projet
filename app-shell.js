@@ -97,6 +97,12 @@ function navigate(page) {
       listKicker.textContent = cfg.kicker || 'Registre';
       listTitle.textContent = cfg.listTitle || cfg.title;
       newBtnLabel.textContent = cfg.addLabel || 'AJOUTER';
+      // « Nouveau membre » masqué pour ceux qui ne peuvent pas ajouter d'effectif
+      if (currentPage === 'effectifs') {
+        newBtn.hidden = !(ME && (ME.peut_ajouter_effectif || ME.peut_modifier_comptes));
+      } else {
+        newBtn.hidden = false;
+      }
       searchInput.value = '';
       renderTable();
     }
