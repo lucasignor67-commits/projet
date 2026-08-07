@@ -793,9 +793,17 @@ const OP_MARKERS = [
   ['vehicle', 'Véhicule', '🚗'], ['plane', 'Avion', '✈'], ['note', 'Annotation', '📌'],
 ];
 const OP_MARK_ICON = Object.fromEntries(OP_MARKERS.map(([id, , ic]) => [id, ic]));
+const OP_SHAPE_TOOLS = [['path', 'Chemin', '〰'], ['zone', 'Zone', '⬠'], ['arrow', "Axe d'attaque", '➟'], ['circle', 'Rayon', '◯']];
+const OP_SHAPE_TYPES = ['path', 'zone', 'arrow', 'circle'];
+const OP_TEAM_COLOR = { alpha: '#4ade80', bravo: '#4e96e8', charlie: '#f59e0b', delta: '#ef4444' };
 let PLAN_MARKERS = [];
+let PLAN_SHAPES = [];
+let PLAN_PHASES = [];   // [{name}] — déroulement de l'opération
+let PLAN_DRAW = null;   // tracé en cours de dessin
 let PLAN_TOOL = 'select';
 let PLAN_TEAM = 'alpha';
+let PLAN_STEP = 0;      // phase assignée aux nouveaux éléments (0 = Toujours)
+let PLAN_ANIM = null;   // { phase, playing, timer } quand l'animation est active
 let PLAN_OP_ID = null;
 let PLAN_SEL = null;
 let _planId = 0;
@@ -806,63 +814,91 @@ function renderOperationPlanner(op) {
   const canManage = opCanManage();
   PLAN_OP_ID = op.id;
   PLAN_MARKERS = ((op.plan && op.plan.markers) || []).map((m) => ({ ...m }));
-  PLAN_TOOL = 'select'; PLAN_TEAM = 'alpha'; PLAN_SEL = null;
-  _planId = PLAN_MARKERS.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
+  PLAN_SHAPES = ((op.plan && op.plan.shapes) || []).map((s) => ({ ...s, points: s.points ? s.points.map((p) => ({ ...p })) : undefined }));
+  PLAN_PHASES = ((op.plan && op.plan.phases) || []).map((p) => ({ ...p }));
+  PLAN_TOOL = 'select'; PLAN_TEAM = 'alpha'; PLAN_SEL = null; PLAN_DRAW = null; PLAN_STEP = 0; PLAN_ANIM = null;
+  _planId = [...PLAN_MARKERS, ...PLAN_SHAPES].reduce((mx, o) => Math.max(mx, o.id || 0), 0);
 
   const teamBtns = OP_TEAMS.map(([id, lbl]) => `<button class="plan-team team-${id}${id === PLAN_TEAM ? ' on' : ''}" data-team="${id}" type="button">${lbl}</button>`).join('');
-  const toolBtns = OP_MARKERS.map(([id, lbl, ic]) => `<button class="plan-tool" data-tool="${id}" type="button" title="${lbl}"><span>${ic}</span></button>`).join('');
+  const markBtns = OP_MARKERS.map(([id, lbl, ic]) => `<button class="plan-tool" data-tool="${id}" type="button" title="${lbl}"><span>${ic}</span></button>`).join('');
+  const shapeBtns = OP_SHAPE_TOOLS.map(([id, lbl, ic]) => `<button class="plan-tool" data-tool="${id}" type="button" title="${lbl}"><span>${ic}</span></button>`).join('');
 
   root.innerHTML = `
     <div class="panel-head" style="margin-bottom:12px">
       <div><span class="panel-kicker">Plan tactique</span><h2 class="panel-title">${escapeHtml(op.code) || 'OPÉRATION'}</h2></div>
       <div class="map-tools">
         <button class="btn btn-ghost btn-sm" id="planBack" type="button">← Retour</button>
+        <button class="btn btn-ghost btn-sm" id="planAnim" type="button">▶ Animation</button>
         ${canManage ? '<button class="btn btn-primary btn-sm" id="planSave" type="button">Enregistrer le plan</button>' : ''}
       </div>
     </div>
     ${canManage ? `
-    <div class="planner-toolbar">
+    <div class="planner-toolbar" id="plannerToolbar">
       <div class="plan-group"><span class="plan-lbl">Équipe</span>${teamBtns}</div>
-      <div class="plan-group"><span class="plan-lbl">Outils</span>
+      <div class="plan-group"><span class="plan-lbl">Marqueurs</span>
         <button class="plan-tool on" data-tool="select" type="button" title="Sélectionner / déplacer"><span>➤</span></button>
-        ${toolBtns}
+        ${markBtns}
       </div>
+      <div class="plan-group"><span class="plan-lbl">Tracés</span>${shapeBtns}</div>
+      <div class="plan-group plan-phases"><span class="plan-lbl">Phase active</span><div class="phase-chips" id="phaseChips"></div><button class="plan-tool" id="phaseAdd" type="button" title="Ajouter une phase">＋</button></div>
       <button class="btn btn-ghost btn-sm" id="planDel" type="button">✕ Supprimer sélection</button>
-    </div>` : '<div class="map-note-bar">Plan en lecture seule — seul le commandement peut le modifier.</div>'}
+    </div>
+    <div class="plan-sel-bar" id="planSelBar" hidden></div>
+    <div class="plan-draw-bar" id="planDrawBar" hidden></div>` : '<div class="map-note-bar">Plan en lecture seule — utilisez ▶ Animation pour dérouler l\'opération.</div>'}
+    <div class="plan-anim-bar" id="planAnimBar" hidden></div>
     <div class="map-wrap planner-map" id="plannerMap">
       <img class="map-img" src="map.jpg" alt="Carte de Cayo Perico" onerror="this.closest('.map-wrap').classList.add('map-missing')">
+      <svg class="planner-svg" id="plannerSvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
       <div class="map-placeholder"><div class="empty-title">CARTE INDISPONIBLE</div><div class="empty-sub">Ajoutez l'image map.jpg.</div></div>
     </div>`;
 
-  root.querySelector('#planBack').addEventListener('click', () => renderOperations());
+  root.querySelector('#planBack').addEventListener('click', () => { exitAnim(true); renderOperations(); });
+  root.querySelector('#planAnim').addEventListener('click', () => { if (PLAN_ANIM) exitAnim(); else enterAnim(); });
   if (canManage) {
-    root.querySelector('#planSave').addEventListener('click', () => operationSavePlan(PLAN_OP_ID, { markers: PLAN_MARKERS }));
+    root.querySelector('#planSave').addEventListener('click', () => operationSavePlan(PLAN_OP_ID, { markers: PLAN_MARKERS, shapes: PLAN_SHAPES, phases: PLAN_PHASES }));
     root.querySelector('#planDel').addEventListener('click', () => {
-      if (PLAN_SEL == null) { notify('Sélectionnez d\'abord un marqueur (outil ➤).'); return; }
-      PLAN_MARKERS = PLAN_MARKERS.filter((m) => m.id !== PLAN_SEL); PLAN_SEL = null; renderPlanMarkers();
+      if (PLAN_SEL == null) { notify('Sélectionnez d\'abord un marqueur ou un tracé (outil ➤).'); return; }
+      PLAN_MARKERS = PLAN_MARKERS.filter((m) => m.id !== PLAN_SEL);
+      PLAN_SHAPES = PLAN_SHAPES.filter((s) => s.id !== PLAN_SEL);
+      PLAN_SEL = null; renderPlanMarkers(); renderPlanShapes(); updateSelBar();
     });
     root.querySelectorAll('.plan-team').forEach((b) => b.addEventListener('click', () => {
       PLAN_TEAM = b.dataset.team;
       root.querySelectorAll('.plan-team').forEach((x) => x.classList.remove('on'));
       b.classList.add('on');
     }));
-    root.querySelectorAll('.plan-tool').forEach((b) => b.addEventListener('click', () => {
+    root.querySelectorAll('.plan-tool[data-tool]').forEach((b) => b.addEventListener('click', () => {
+      if (PLAN_DRAW) cancelDraw();
       PLAN_TOOL = b.dataset.tool;
-      root.querySelectorAll('.plan-tool').forEach((x) => x.classList.remove('on'));
+      root.querySelectorAll('.plan-tool[data-tool]').forEach((x) => x.classList.remove('on'));
       b.classList.add('on');
     }));
+    root.querySelector('#phaseAdd').addEventListener('click', () => {
+      const name = prompt('Nom de la phase :', 'Phase ' + (PLAN_PHASES.length + 1));
+      if (name == null) return;
+      PLAN_PHASES.push({ name: name.trim() || ('Phase ' + (PLAN_PHASES.length + 1)) });
+      PLAN_STEP = PLAN_PHASES.length;
+      renderPhaseChips();
+    });
     const map = root.querySelector('#plannerMap');
     map.addEventListener('click', (e) => {
-      if (PLAN_TOOL === 'select' || e.target.closest('.plan-marker')) return;
+      if (PLAN_ANIM || e.target.closest('.plan-marker')) return;
       const r = map.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width) * 100;
-      const y = ((e.clientY - r.top) / r.height) * 100;
+      const x = +(((e.clientX - r.left) / r.width) * 100).toFixed(2);
+      const y = +(((e.clientY - r.top) / r.height) * 100).toFixed(2);
+      if (OP_SHAPE_TYPES.includes(PLAN_TOOL)) { planShapeClick(x, y); return; }
+      if (PLAN_TOOL === 'select') return;
       const label = PLAN_TOOL === 'note' ? (prompt("Texte de l'annotation :") || '') : '';
-      PLAN_MARKERS.push({ id: ++_planId, type: PLAN_TOOL, team: PLAN_TEAM, x: +x.toFixed(2), y: +y.toFixed(2), label });
+      PLAN_MARKERS.push({ id: ++_planId, type: PLAN_TOOL, team: PLAN_TEAM, x, y, label, step: PLAN_STEP });
       renderPlanMarkers();
     });
+    renderPhaseChips();
   }
+  // Recalcule les rayons une fois la carte chargée (ratio largeur/hauteur correct)
+  const imgEl = root.querySelector('#plannerMap .map-img');
+  if (imgEl) imgEl.addEventListener('load', () => renderPlanShapes());
   renderPlanMarkers();
+  renderPlanShapes();
 }
 
 function renderPlanMarkers() {
@@ -871,13 +907,14 @@ function renderPlanMarkers() {
   const canManage = opCanManage();
   map.querySelectorAll('.plan-marker').forEach((el) => el.remove());
   PLAN_MARKERS.forEach((m) => {
+    if (!planStepVisible(m.step)) return;
     const el = document.createElement('div');
     el.className = `plan-marker team-${m.team}${PLAN_SEL === m.id ? ' sel' : ''}`;
     el.style.left = m.x + '%'; el.style.top = m.y + '%';
     el.dataset.id = m.id;
     el.innerHTML = `<span class="pm-ico">${OP_MARK_ICON[m.type] || '•'}</span>${m.label ? `<span class="pm-lbl">${escapeHtml(m.label)}</span>` : ''}`;
     map.appendChild(el);
-    if (canManage) attachPlanDrag(el, m, map);
+    if (canManage && !PLAN_ANIM) attachPlanDrag(el, m, map);
   });
 }
 
@@ -899,11 +936,218 @@ function attachPlanDrag(el, m, map) {
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
       m.x = +m.x.toFixed(2); m.y = +m.y.toFixed(2);
-      if (!moved) { PLAN_SEL = (PLAN_SEL === m.id ? null : m.id); renderPlanMarkers(); }
+      if (!moved) { PLAN_SEL = (PLAN_SEL === m.id ? null : m.id); renderPlanMarkers(); updateSelBar(); }
     };
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);
   });
+}
+
+// Tracés (SVG en % sur la carte) : chemin, zone, axe d'attaque, rayon
+function renderPlanShapes() {
+  const svg = document.getElementById('plannerSvg');
+  const map = document.getElementById('plannerMap');
+  if (!svg || !map) return;
+  const canManage = opCanManage();
+  const rect = map.getBoundingClientRect();
+  const ratio = rect.height ? rect.width / rect.height : 1;
+
+  const draw = (s) => {
+    const col = OP_TEAM_COLOR[s.team] || '#4ade80';
+    const sel = PLAN_SEL === s.id;
+    const sw = sel ? 4 : (s.type === 'arrow' ? 3 : 2.4);
+    const idA = s.id != null ? ` data-id="${s.id}"` : '';
+    if (s.type === 'path') return `<polyline class="pl-shape"${idA} points="${s.points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (s.type === 'zone') return `<polygon class="pl-shape"${idA} points="${s.points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="${col}22" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+    if (s.type === 'arrow') { const [a, b] = s.points; if (!b) return ''; return `<line class="pl-shape"${idA} x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" marker-end="url(#pl-arrow)"/>`; }
+    if (s.type === 'circle') return `<ellipse class="pl-shape"${idA} cx="${s.x}" cy="${s.y}" rx="${s.r}" ry="${(s.r * ratio).toFixed(2)}" fill="${col}18" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke"/>`;
+    return '';
+  };
+
+  const finished = PLAN_SHAPES.filter((s) => planStepVisible(s.step)).map(draw).join('');
+  let preview = '';
+  if (PLAN_DRAW) {
+    const d = PLAN_DRAW, col = OP_TEAM_COLOR[d.team] || '#4ade80';
+    const dot = (p) => `<circle cx="${p.x}" cy="${p.y}" r="0.9" fill="${col}" vector-effect="non-scaling-stroke"/>`;
+    if ((d.type === 'path' || d.type === 'zone') && d.points.length >= 2) {
+      preview += `<polyline points="${d.points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${col}" stroke-width="2.4" vector-effect="non-scaling-stroke" stroke-dasharray="3 2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+    preview += (d.points || []).map(dot).join('');
+  }
+
+  svg.innerHTML = `<defs><marker id="pl-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill="context-stroke"/></marker></defs>${finished}${preview}`;
+
+  if (canManage && !PLAN_ANIM) {
+    svg.querySelectorAll('.pl-shape').forEach((el) => el.addEventListener('click', (e) => {
+      if (PLAN_TOOL !== 'select') return;
+      e.stopPropagation();
+      const id = +el.dataset.id;
+      PLAN_SEL = (PLAN_SEL === id ? null : id);
+      renderPlanShapes(); renderPlanMarkers(); updateSelBar();
+    }));
+  }
+}
+
+function planShapeClick(x, y) {
+  const t = PLAN_TOOL;
+  if (t === 'arrow') {
+    if (!PLAN_DRAW) PLAN_DRAW = { type: 'arrow', team: PLAN_TEAM, points: [{ x, y }] };
+    else { PLAN_DRAW.points.push({ x, y }); finishDraw(); return; }
+  } else if (t === 'circle') {
+    if (!PLAN_DRAW) PLAN_DRAW = { type: 'circle', team: PLAN_TEAM, points: [{ x, y }] };
+    else {
+      const c = PLAN_DRAW.points[0];
+      const rect = document.getElementById('plannerMap').getBoundingClientRect();
+      const dx = (x - c.x) / 100 * rect.width;
+      const dy = (y - c.y) / 100 * rect.height;
+      const r = Math.hypot(dx, dy) / rect.width * 100;
+      PLAN_DRAW = { type: 'circle', team: PLAN_DRAW.team, x: c.x, y: c.y, r: +r.toFixed(2) };
+      finishDraw(); return;
+    }
+  } else { // path / zone
+    if (!PLAN_DRAW) PLAN_DRAW = { type: t, team: PLAN_TEAM, points: [{ x, y }] };
+    else PLAN_DRAW.points.push({ x, y });
+  }
+  renderPlanShapes();
+  updateDrawBar();
+}
+
+function finishDraw() {
+  if (!PLAN_DRAW) return;
+  const s = PLAN_DRAW;
+  const ok = (s.type === 'path' && s.points.length >= 2) ||
+             (s.type === 'zone' && s.points.length >= 3) ||
+             (s.type === 'arrow' && s.points && s.points.length >= 2) ||
+             (s.type === 'circle' && s.r > 0);
+  if (ok) { s.id = ++_planId; s.step = PLAN_STEP; PLAN_SHAPES.push(s); }
+  else notify('Tracé trop court — annulé.');
+  PLAN_DRAW = null;
+  renderPlanShapes(); updateDrawBar();
+}
+
+function cancelDraw() {
+  PLAN_DRAW = null;
+  renderPlanShapes(); updateDrawBar();
+}
+
+function updateDrawBar() {
+  const bar = document.getElementById('planDrawBar');
+  if (!bar) return;
+  if (!PLAN_DRAW) { bar.hidden = true; bar.innerHTML = ''; return; }
+  const t = PLAN_DRAW.type, n = PLAN_DRAW.points ? PLAN_DRAW.points.length : 0;
+  let msg;
+  if (t === 'path') msg = `Chemin — ${n} point(s). Cliquez pour ajouter, puis Terminer.`;
+  else if (t === 'zone') msg = `Zone — ${n} point(s). Il en faut au moins 3, puis Terminer.`;
+  else if (t === 'arrow') msg = "Axe d'attaque — cliquez le point d'arrivée.";
+  else msg = 'Rayon — cliquez pour définir le rayon.';
+  bar.hidden = false;
+  bar.innerHTML = `<span class="plan-draw-msg">${msg}</span>${(t === 'path' || t === 'zone') ? '<button class="btn btn-primary btn-sm" id="drawFinish" type="button">✓ Terminer</button>' : ''}<button class="btn btn-ghost btn-sm" id="drawCancel" type="button">Annuler</button>`;
+  const f = document.getElementById('drawFinish');
+  if (f) f.addEventListener('click', finishDraw);
+  document.getElementById('drawCancel').addEventListener('click', cancelDraw);
+}
+
+// ── Phases (déroulement de l'opération) + animation ──
+function planStepVisible(step) {
+  if (!PLAN_ANIM) return true;
+  const s = step || 0;
+  return s === 0 || s <= PLAN_ANIM.phase;
+}
+
+function renderPhaseChips() {
+  const box = document.getElementById('phaseChips');
+  if (!box) return;
+  const chips = [`<button class="phase-chip${PLAN_STEP === 0 ? ' on' : ''}" data-step="0" type="button">Toujours</button>`]
+    .concat(PLAN_PHASES.map((p, i) => `<button class="phase-chip${PLAN_STEP === i + 1 ? ' on' : ''}" data-step="${i + 1}" type="button" title="Double-clic : renommer">${i + 1}. ${escapeHtml(p.name)}<span class="phase-del" data-del="${i + 1}" title="Supprimer la phase">✕</span></button>`));
+  box.innerHTML = chips.join('');
+  box.querySelectorAll('.phase-chip').forEach((c) => {
+    c.addEventListener('click', (e) => {
+      const del = e.target.closest('.phase-del');
+      if (del) { deletePhase(+del.dataset.del); return; }
+      PLAN_STEP = +c.dataset.step; renderPhaseChips();
+    });
+    c.addEventListener('dblclick', () => {
+      const step = +c.dataset.step;
+      if (!step) return;
+      const cur = PLAN_PHASES[step - 1];
+      const name = prompt('Nom de la phase :', cur.name);
+      if (name != null) { cur.name = name.trim() || cur.name; renderPhaseChips(); }
+    });
+  });
+}
+
+function deletePhase(idx) {
+  PLAN_PHASES.splice(idx - 1, 1);
+  const fix = (o) => { const s = o.step || 0; if (s === idx) o.step = 0; else if (s > idx) o.step = s - 1; };
+  PLAN_MARKERS.forEach(fix); PLAN_SHAPES.forEach(fix);
+  if (PLAN_STEP === idx) PLAN_STEP = 0; else if (PLAN_STEP > idx) PLAN_STEP -= 1;
+  renderPhaseChips(); renderPlanMarkers(); renderPlanShapes();
+}
+
+function updateSelBar() {
+  const bar = document.getElementById('planSelBar');
+  if (!bar) return;
+  const el = PLAN_MARKERS.find((m) => m.id === PLAN_SEL) || PLAN_SHAPES.find((s) => s.id === PLAN_SEL);
+  if (!el || PLAN_ANIM) { bar.hidden = true; bar.innerHTML = ''; return; }
+  const chips = [`<button class="phase-chip${(el.step || 0) === 0 ? ' on' : ''}" data-s="0" type="button">Toujours</button>`]
+    .concat(PLAN_PHASES.map((p, i) => `<button class="phase-chip${(el.step || 0) === i + 1 ? ' on' : ''}" data-s="${i + 1}" type="button">${i + 1}</button>`));
+  bar.hidden = false;
+  bar.innerHTML = `<span class="plan-lbl">Phase de l'élément</span>${chips.join('')}`;
+  bar.querySelectorAll('.phase-chip').forEach((c) => c.addEventListener('click', () => { el.step = +c.dataset.s; updateSelBar(); }));
+}
+
+function enterAnim() {
+  if (PLAN_DRAW) cancelDraw();
+  PLAN_SEL = null; updateSelBar();
+  PLAN_ANIM = { phase: 0, playing: false, timer: null };
+  const tb = document.getElementById('plannerToolbar'); if (tb) tb.style.display = 'none';
+  const db = document.getElementById('planDrawBar'); if (db) db.hidden = true;
+  const btn = document.getElementById('planAnim'); if (btn) btn.textContent = '■ Quitter';
+  renderAnimBar(); renderPlanMarkers(); renderPlanShapes();
+}
+
+function exitAnim(silent) {
+  if (!PLAN_ANIM) return;
+  if (PLAN_ANIM.timer) clearInterval(PLAN_ANIM.timer);
+  PLAN_ANIM = null;
+  const tb = document.getElementById('plannerToolbar'); if (tb) tb.style.display = '';
+  const ab = document.getElementById('planAnimBar'); if (ab) { ab.hidden = true; ab.innerHTML = ''; }
+  const btn = document.getElementById('planAnim'); if (btn) btn.textContent = '▶ Animation';
+  if (!silent) { renderPlanMarkers(); renderPlanShapes(); }
+}
+
+function animGoto(p) {
+  if (!PLAN_ANIM) return;
+  PLAN_ANIM.phase = Math.max(0, Math.min(PLAN_PHASES.length, p));
+  renderAnimBar(); renderPlanMarkers(); renderPlanShapes();
+}
+
+function animPlayToggle() {
+  if (!PLAN_ANIM) return;
+  if (PLAN_ANIM.playing) { clearInterval(PLAN_ANIM.timer); PLAN_ANIM.timer = null; PLAN_ANIM.playing = false; renderAnimBar(); return; }
+  if (PLAN_ANIM.phase >= PLAN_PHASES.length) PLAN_ANIM.phase = 0;
+  PLAN_ANIM.playing = true;
+  PLAN_ANIM.timer = setInterval(() => {
+    if (!PLAN_ANIM || PLAN_ANIM.phase >= PLAN_PHASES.length) { if (PLAN_ANIM) { clearInterval(PLAN_ANIM.timer); PLAN_ANIM.timer = null; PLAN_ANIM.playing = false; renderAnimBar(); } return; }
+    animGoto(PLAN_ANIM.phase + 1);
+  }, 1700);
+  renderAnimBar(); renderPlanMarkers(); renderPlanShapes();
+}
+
+function renderAnimBar() {
+  const bar = document.getElementById('planAnimBar');
+  if (!bar || !PLAN_ANIM) return;
+  const N = PLAN_PHASES.length, p = PLAN_ANIM.phase;
+  const name = p === 0 ? 'Mise en place (éléments « Toujours »)' : (PLAN_PHASES[p - 1] ? PLAN_PHASES[p - 1].name : '');
+  bar.hidden = false;
+  bar.innerHTML = `
+    <button class="btn btn-ghost btn-sm" id="animPrev" type="button"${p <= 0 ? ' disabled' : ''}>◀</button>
+    <button class="btn btn-ghost btn-sm" id="animPlay" type="button">${PLAN_ANIM.playing ? '⏸ Pause' : '▶ Lecture'}</button>
+    <button class="btn btn-ghost btn-sm" id="animNext" type="button"${p >= N ? ' disabled' : ''}>▶</button>
+    <span class="anim-phase"><b>Phase ${p} / ${N}</b>${name ? ' — ' + escapeHtml(name) : ''}</span>`;
+  bar.querySelector('#animPrev').addEventListener('click', () => animGoto(p - 1));
+  bar.querySelector('#animNext').addEventListener('click', () => animGoto(p + 1));
+  bar.querySelector('#animPlay').addEventListener('click', animPlayToggle);
 }
 
 async function operationSavePlan(id, plan) {
