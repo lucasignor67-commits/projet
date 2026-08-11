@@ -166,6 +166,21 @@ export default async function handler(req, res) {
         return res.status(200).json({ formations: forms || [], certifs });
       }
 
+      // ── Statistiques : nb de formations DONNÉES par formateur sur 7 jours ──
+      // Source = journal d'audit (action 'FORMATION'), regroupé par acteur.
+      case 'formations_semaine': {
+        if (!me) return fail('Non authentifié', 401);
+        const since = new Date(Date.now() - 7 * 864e5).toISOString();
+        const { data } = await sb().from('audit_log')
+          .select('acteur_matricule').eq('action', 'FORMATION').gte('ts', since);
+        const counts = {};
+        (data || []).forEach((r) => {
+          const m = String(r.acteur_matricule || '').trim();
+          if (m) counts[m] = (counts[m] || 0) + 1;
+        });
+        return res.status(200).json({ formations_semaine: counts });
+      }
+
       case 'accounts': {
         if (!me) return fail('Non authentifié', 401);
         if (!me.peut_modifier_comptes && !me.peut_voir_mdp && !me.peut_ajouter_effectif) return fail('Accès refusé', 403);
@@ -826,14 +841,19 @@ export default async function handler(req, res) {
         if (!mat || !formationNom) return fail('Champs manquants');
         const { data: f } = await sb().from('formations').select('id').eq('nom', formationNom).maybeSingle();
         if (!f) return fail('Formation inconnue');
+        // Nom du milicien ciblé, pour un journal d'audit lisible
+        const { data: tgt } = await sb().from('comptes').select('nom').eq('matricule', mat).maybeSingle();
+        const cible = tgt?.nom ? `${mat} · ${tgt.nom}` : mat;
         if (has) {
           const { error } = await sb().from('compte_formations')
-            .upsert({ compte_matricule: mat, formation_id: f.id }, { onConflict: 'compte_matricule,formation_id' });
+            .upsert({ compte_matricule: mat, formation_id: f.id, date_obtention: new Date().toISOString().slice(0, 10) }, { onConflict: 'compte_matricule,formation_id' });
           if (error) return fail(error.message);
+          await audit(me, 'FORMATION', cible, formationNom);
         } else {
           const { error } = await sb().from('compte_formations')
             .delete().eq('compte_matricule', mat).eq('formation_id', f.id);
           if (error) return fail(error.message);
+          await audit(me, 'FORMATION_RETRAIT', cible, formationNom);
         }
         return res.status(200).json({ ok: true });
       }
