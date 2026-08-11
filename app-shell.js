@@ -188,8 +188,26 @@ function buildHomeGrid() {
 // ── Stats de l'accueil ──
 function updateHomeStats() {
   document.getElementById('homeEffectifs').textContent = PAGES.effectifs.data.length;
-  document.getElementById('homeAlertes').textContent =
-    countBy(PAGES.carte.data, 'statut', 'ALERTE') + countBy(PAGES.communications.data, 'priorite', 'URGENTE');
+  const alertes = countBy(PAGES.carte.data, 'statut', 'ALERTE') + countBy(PAGES.communications.data, 'priorite', 'URGENTE');
+  document.getElementById('homeAlertes').textContent = alertes;
+
+  // Opérateur / grade réels du compte connecté
+  const op = document.getElementById('homeOperator');
+  const gr = document.getElementById('homeGrade');
+  if (op) op.textContent = ME ? `${ME.matricule} | ${ME.nom}` : '—';
+  if (gr) gr.textContent = ME ? (ME.grade || '—') : '—';
+
+  // Pastille de notifications : nombre réel d'alertes en cours (masquée si 0)
+  setNotifBadge(alertes);
+}
+
+// Met à jour la pastille de notifications (masquée quand vide)
+function setNotifBadge(n) {
+  const b = document.getElementById('notifBadge');
+  if (!b) return;
+  const v = Math.max(0, Number(n) || 0);
+  b.textContent = v > 99 ? '99+' : String(v);
+  b.hidden = v === 0;
 }
 
 // Recalcule le bandeau de stats de la page courante
@@ -354,12 +372,13 @@ function onRealtimeInsert(kind, payload) {
   bumpNotifBadge();
 }
 
-// Incrémente la pastille de notifications de la topbar
+// Incrémente la pastille de notifications de la topbar (et la ré-affiche)
 function bumpNotifBadge() {
-  const b = document.querySelector('.notif-badge');
+  const b = document.getElementById('notifBadge');
   if (!b) return;
   const n = (parseInt(b.textContent, 10) || 0) + 1;
   b.textContent = n > 99 ? '99+' : String(n);
+  b.hidden = false;
   b.classList.remove('badge-pulse'); void b.offsetWidth; b.classList.add('badge-pulse');
 }
 

@@ -37,15 +37,15 @@
       <button class="icon-btn" title="Recherche">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <button class="icon-btn" title="Nouveau">
+      <button class="icon-btn" id="quickNewBtn" title="Nouveau">
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <button class="icon-btn" title="Profil">
+      <button class="icon-btn" id="profileBtn" title="Profil">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 20c0-3.3 3.6-5 8-5s8 1.7 8 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <button class="icon-btn notif" title="Notifications">
+      <button class="icon-btn notif" id="notifBtn" title="Notifications">
         <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <span class="notif-badge">17</span>
+        <span class="notif-badge" id="notifBadge" hidden>0</span>
       </button>
     </div>
   </header>
@@ -173,11 +173,11 @@
           <div class="header-panel-stats">
             <div class="stat-box">
               <span class="stat-label">Opérateur</span>
-              <span class="stat-value">EL COMANDANTE</span>
+              <span class="stat-value" id="homeOperator">—</span>
             </div>
             <div class="stat-box">
-              <span class="stat-label">Statut</span>
-              <span class="stat-value">EN SERVICE</span>
+              <span class="stat-label">Grade</span>
+              <span class="stat-value" id="homeGrade">—</span>
             </div>
             <div class="stat-box">
               <span class="stat-label">Effectifs</span>

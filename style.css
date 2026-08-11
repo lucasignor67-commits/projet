@@ -2730,3 +2730,106 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   .data-table tbody tr, .home-tile, .rap-card, .mcard, .podium-card,
   .gs-overlay, .gs-box, .notif-badge.badge-pulse { animation: none !important; }
 }
+
+/* ═══════════════ TOPBAR — POPOVERS (Profil / Nouveau / Notifs) ═══════════════ */
+.topbar-pop {
+  position: fixed; z-index: 950; min-width: 210px; max-width: min(320px, calc(100vw - 20px));
+  background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6); overflow: hidden;
+  animation: gs-pop 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.topbar-pop.pop-wide { min-width: 260px; }
+
+/* Menu (Nouveau / Notifs) */
+.pop-menu { padding: 6px; }
+.pop-menu-title { font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-low); padding: 8px 10px 6px; }
+.pop-menu-item {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  background: none; border: none; border-radius: var(--radius-sm); cursor: pointer;
+  color: var(--text-hi); font-size: 13px; text-align: left;
+}
+.pop-menu-item:hover { background: rgba(34, 197, 94, 0.12); }
+.pop-menu-ic { font-size: 15px; width: 20px; text-align: center; }
+.pop-empty { padding: 12px 12px 16px; color: var(--text-low); font-size: 12.5px; }
+
+/* Fiche profil */
+.pop-profile { padding: 14px; }
+.pop-prof-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.pop-avatar {
+  width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: 0.5px;
+  color: var(--text-hi); background: var(--bg-elevated); border: 2px solid var(--sec-color, var(--green-400));
+}
+.pop-prof-id { min-width: 0; }
+.pop-prof-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--text-hi); letter-spacing: 0.3px; }
+.pop-prof-mat { font-family: var(--font-mono); font-size: 11px; color: var(--text-mid); }
+.pop-prof-rows { display: flex; flex-direction: column; gap: 1px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.pop-prof-rows > div { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: var(--bg-elevated); }
+.pop-prof-rows span { font-size: 11px; color: var(--text-mid); }
+.pop-prof-rows b { font-size: 12.5px; color: var(--text-hi); }
+.pop-perms { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.pop-perm {
+  font-family: var(--font-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px;
+  color: var(--green-100); background: rgba(34, 197, 94, 0.18); border: 1px solid var(--border-strong);
+  border-radius: 5px; padding: 3px 7px;
+}
+.pop-logout { width: 100%; justify-content: center; }
+
+/* Couleurs de section (avatars / accents) */
+.sec-direction { --sec-color: #ef4444; }
+.sec-comando   { --sec-color: #f59e0b; }
+.sec-liderazgo { --sec-color: #4e96e8; }
+.sec-aplicacion{ --sec-color: #4ade80; }
+
+/* ═══════════════ EFFECTIFS — regroupé + avatars ═══════════════ */
+.eff-group { margin-bottom: 18px; }
+.eff-group-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+  padding: 6px 12px; border-radius: var(--radius-sm);
+  background: var(--bg-elevated); border-left: 3px solid var(--sec-color, var(--green-400));
+}
+.eff-group-name { font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: 1px; color: var(--text-hi); text-transform: uppercase; }
+.eff-group-count {
+  font-family: var(--font-mono); font-size: 10px; color: var(--sec-color, var(--green-300));
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px;
+}
+.eff-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.eff-card {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.eff-card:hover { border-color: var(--border-strong); transform: translateX(2px); }
+.eff-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 12.5px; letter-spacing: 0.5px;
+  color: var(--text-hi); background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--sec-color, #4ade80) 16%, var(--bg-elevated));
+  border: 1.5px solid var(--sec-color, #4ade80);
+}
+.eff-mat {
+  flex: none; min-width: 30px; text-align: center; font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  color: var(--text-mid);
+}
+.eff-name { flex: 1; min-width: 0; color: var(--text-hi); font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eff-grade { flex: none; color: var(--text-mid); font-size: 11.5px; white-space: nowrap; }
+
+/* ═══════════════ RADIO — cartes de canaux ═══════════════ */
+.radio-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.radio-card {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  background: linear-gradient(150deg, var(--bg-elevated), var(--bg-panel));
+  border: 1px solid var(--border); border-radius: var(--radius); transition: border-color 0.15s, transform 0.15s;
+}
+.radio-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+.radio-ico { flex: none; width: 38px; height: 38px; display: grid; place-items: center; color: var(--green-300); }
+.radio-ico svg { width: 24px; height: 24px; }
+.radio-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.radio-canal { color: var(--text-hi); font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.radio-usage { color: var(--text-mid); font-size: 11px; }
+.radio-freq { flex: none; font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--green-300); text-align: right; }
+.radio-statut { display: block; margin-top: 4px; }
+
+@media (max-width: 700px) {
+  .eff-list, .radio-cards { grid-template-columns: 1fr; }
+}

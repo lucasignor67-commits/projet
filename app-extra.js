@@ -539,3 +539,210 @@ function renderStatsCards() {
 
 // La visibilité des entrées « Journal d'audit » et « Statistiques » est gérée
 // dans app-shell.js › afterLogin (classes .nav-audit / .nav-stats).
+
+/* ─────────────────────────────────────────────────────────────
+   5. TOPBAR : popovers Profil / Nouveau / Notifications
+   ───────────────────────────────────────────────────────────── */
+
+const SECTION_META = {
+  direction: ['Dirección', 'red'],
+  comando: ['Comando', 'amber'],
+  liderazgo: ['Liderazgo', 'blue'],
+  aplicacion: ['Aplicación', 'green'],
+};
+const SECTION_ORDER = ['direction', 'comando', 'liderazgo', 'aplicacion'];
+
+// Retrouve la section d'un grade (via GRADES chargés, sinon grades de démo)
+function sectionOfGrade(gradeName) {
+  const list = (typeof GRADES !== 'undefined' && GRADES.length) ? GRADES
+    : (typeof DEMO_GRADES !== 'undefined' ? DEMO_GRADES : []);
+  const g = list.find((x) => x.nom === gradeName);
+  return g ? g.section : 'aplicacion';
+}
+
+let _popover = null;
+function closePopover() {
+  if (!_popover) return;
+  _popover.remove(); _popover = null;
+  document.removeEventListener('click', popoverOutside, true);
+  document.removeEventListener('keydown', popoverKey);
+}
+function popoverOutside(e) {
+  if (_popover && !_popover.contains(e.target) && !_popover._anchor.contains(e.target)) closePopover();
+}
+function popoverKey(e) { if (e.key === 'Escape') closePopover(); }
+function openPopover(anchor, html, cls) {
+  closePopover();
+  const p = document.createElement('div');
+  p.className = 'topbar-pop' + (cls ? ' ' + cls : '');
+  p.innerHTML = html;
+  p._anchor = anchor;
+  document.body.appendChild(p);
+  const r = anchor.getBoundingClientRect();
+  p.style.top = (r.bottom + 8) + 'px';
+  p.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  _popover = p;
+  setTimeout(() => {
+    document.addEventListener('click', popoverOutside, true);
+    document.addEventListener('keydown', popoverKey);
+  }, 0);
+  return p;
+}
+
+function openProfile() {
+  if (!ME) { notify('Non connecté.', 'info'); return; }
+  const perms = [];
+  if (ME.peut_modifier_comptes) perms.push('Admin comptes');
+  if (ME.peut_ajouter_effectif) perms.push('Ajout effectif');
+  if (ME.peut_voir_mdp) perms.push('Voir mots de passe');
+  if (ME.formateur) perms.push('Formateur');
+  if (ME.recruteur) perms.push('Recruteur');
+  const secLabel = (SECTION_META[ME.section] || [ME.section || '—'])[0];
+  const p = openPopover(document.getElementById('profileBtn'), `
+    <div class="pop-profile">
+      <div class="pop-prof-head">
+        <span class="pop-avatar sec-${ME.section || 'aplicacion'}">${escapeHtml(initials(ME.nom || '?'))}</span>
+        <div class="pop-prof-id">
+          <div class="pop-prof-name">${escapeHtml(ME.nom || '—')}</div>
+          <div class="pop-prof-mat">Matricule ${escapeHtml(ME.matricule || '—')}</div>
+        </div>
+      </div>
+      <div class="pop-prof-rows">
+        <div><span>Grade</span><b>${escapeHtml(ME.grade || '—')}</b></div>
+        <div><span>Section</span><b>${escapeHtml(secLabel)}</b></div>
+        <div><span>Statut</span><b>${escapeHtml(ME.statut || '—')}</b></div>
+      </div>
+      ${perms.length ? `<div class="pop-perms">${perms.map((x) => `<span class="pop-perm">${x}</span>`).join('')}</div>` : ''}
+      <button class="btn btn-ghost btn-sm pop-logout" id="popLogout" type="button">Se déconnecter</button>
+    </div>`, 'pop-wide');
+  p.querySelector('#popLogout').addEventListener('click', () => {
+    localStorage.removeItem('milicia.token'); location.reload();
+  });
+}
+
+function openQuickNew() {
+  const items = [['📄', 'Rapport', 'rapports'], ['🚓', 'Patrouille', 'patrouilles'], ['🧹', 'TIG', 'tig']];
+  if (ME && (ME.section === 'comando' || ME.section === 'direction')) {
+    items.push(['⚖️', 'Sanction', 'sanctions'], ['🎯', 'Opération', 'operations'], ['📢', 'Annonce', 'communications']);
+  }
+  const p = openPopover(document.getElementById('quickNewBtn'), `
+    <div class="pop-menu">
+      <div class="pop-menu-title">Créer…</div>
+      ${items.map(([ic, l, pg]) => `<button class="pop-menu-item" data-page="${pg}" type="button"><span class="pop-menu-ic">${ic}</span>${l}</button>`).join('')}
+    </div>`);
+  p.querySelectorAll('.pop-menu-item').forEach((b) => b.addEventListener('click', () => { navigate(b.dataset.page); closePopover(); }));
+}
+
+function openNotif() {
+  const zoneAlerts = countBy(PAGES.carte.data, 'statut', 'ALERTE');
+  const urgent = countBy(PAGES.communications.data, 'priorite', 'URGENTE');
+  const total = zoneAlerts + urgent;
+  const body = total ? `
+    ${zoneAlerts ? `<button class="pop-menu-item" data-page="carte" type="button"><span class="pop-menu-ic">⚠️</span>${zoneAlerts} zone(s) en alerte</button>` : ''}
+    ${urgent ? `<button class="pop-menu-item" data-page="communications" type="button"><span class="pop-menu-ic">📢</span>${urgent} annonce(s) urgente(s)</button>` : ''}`
+    : '<div class="pop-empty">Aucune alerte en cours.</div>';
+  const p = openPopover(document.getElementById('notifBtn'), `
+    <div class="pop-menu">
+      <div class="pop-menu-title">Notifications</div>
+      ${body}
+    </div>`);
+  p.querySelectorAll('.pop-menu-item').forEach((b) => b.addEventListener('click', () => { navigate(b.dataset.page); closePopover(); }));
+}
+
+(function wireTopbar() {
+  document.getElementById('profileBtn')?.addEventListener('click', (e) => { e.stopPropagation(); openProfile(); });
+  document.getElementById('quickNewBtn')?.addEventListener('click', (e) => { e.stopPropagation(); openQuickNew(); });
+  document.getElementById('notifBtn')?.addEventListener('click', (e) => { e.stopPropagation(); openNotif(); });
+})();
+
+/* ─────────────────────────────────────────────────────────────
+   6. EFFECTIFS : regroupement par section + avatars + badges
+   ───────────────────────────────────────────────────────────── */
+
+let EFF_Q = '';
+
+PAGES.effectifs.view = 'custom';
+PAGES.effectifs.render = function () {
+  const canAdd = !!(ME && (ME.peut_ajouter_effectif || ME.peut_modifier_comptes));
+  return `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Personnel</span><h2 class="panel-title">REGISTRE DU PERSONNEL</h2></div>
+      <span class="panel-count" id="effCount">${PAGES.effectifs.data.length}</span>
+    </div>
+    <div class="filter-row">
+      <div class="search-field">
+        <input type="text" id="effSearch" placeholder="Rechercher un matricule, un nom, un grade…" autocomplete="off" value="${escapeHtml(EFF_Q)}">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      ${canAdd ? `<button class="btn btn-primary" id="effNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVEAU MEMBRE</button>` : ''}
+    </div>
+    <div id="effGroups"></div>`;
+};
+PAGES.effectifs.afterRender = function () {
+  const root = document.getElementById('customSection');
+  const search = root.querySelector('#effSearch');
+  search?.addEventListener('input', () => { EFF_Q = search.value; renderEffGroups(); });
+  root.querySelector('#effNew')?.addEventListener('click', () => navigate('gestion'));
+  renderEffGroups();
+};
+
+function effCardHTML(m) {
+  const sec = m.section || sectionOfGrade(m.grade);
+  return `<div class="eff-card sec-${sec}">
+    <span class="eff-avatar sec-${sec}">${escapeHtml(initials(m.nom || '?'))}</span>
+    <span class="eff-mat">${escapeHtml(m.matricule)}</span>
+    <span class="eff-name">${escapeHtml(m.nom)}</span>
+    <span class="eff-grade">${escapeHtml(m.grade || '—')}</span>
+    ${badge(m.statut)}
+  </div>`;
+}
+
+function renderEffGroups() {
+  const host = document.getElementById('effGroups');
+  if (!host) return;
+  const q = EFF_Q.trim().toLowerCase();
+  const filtered = PAGES.effectifs.data.filter((m) => !q || [m.matricule, m.nom, m.grade].some((v) => String(v || '').toLowerCase().includes(q)));
+
+  const groups = {};
+  filtered.forEach((m) => { const s = m.section || sectionOfGrade(m.grade); (groups[s] = groups[s] || []).push(m); });
+
+  let html = '';
+  SECTION_ORDER.forEach((sec) => {
+    const arr = groups[sec];
+    if (!arr || !arr.length) return;
+    arr.sort((a, b) => (Number(b.niveau || 0) - Number(a.niveau || 0)) || (Number(a.matricule) - Number(b.matricule)));
+    const [label] = SECTION_META[sec];
+    html += `<div class="eff-group">
+      <div class="eff-group-head sec-${sec}"><span class="eff-group-name">${label}</span><span class="eff-group-count">${arr.length}</span></div>
+      <div class="eff-list">${arr.map(effCardHTML).join('')}</div>
+    </div>`;
+  });
+
+  host.innerHTML = html || '<div class="empty-state"><div class="empty-title">AUCUN MEMBRE</div><div class="empty-sub">Aucun résultat pour cette recherche.</div></div>';
+  const count = document.getElementById('effCount');
+  if (count) count.textContent = filtered.length;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   7. RADIO : cartes de canaux
+   ───────────────────────────────────────────────────────────── */
+
+PAGES.radio.view = 'custom';
+PAGES.radio.render = function (cfg) {
+  return `
+    <div class="panel-head">
+      <div><span class="panel-kicker">Transmissions</span><h2 class="panel-title">CANAUX ACTIFS</h2></div>
+      <span class="panel-count">${cfg.data.length}</span>
+    </div>
+    <div class="radio-cards">
+      ${cfg.data.map((c) => `
+        <div class="radio-card">
+          <div class="radio-ico"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 8V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="14" r="2" stroke="currentColor" stroke-width="2"/><path d="M14 12h3M14 16h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+          <div class="radio-info">
+            <span class="radio-canal">${escapeHtml(c.canal)}</span>
+            ${c.usage ? `<span class="radio-usage">${escapeHtml(c.usage)}</span>` : ''}
+          </div>
+          <div class="radio-freq">${escapeHtml(c.freq)}${c.statut ? `<span class="radio-statut">${badge(c.statut)}</span>` : ''}</div>
+        </div>`).join('')}
+    </div>`;
+};

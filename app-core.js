@@ -42,7 +42,7 @@ const occupantsAt = (nom) => Object.keys(PRESENCE).filter((mat) => PRESENCE[mat]
 const byMatricule = (a, b) => Number(a.matricule) - Number(b.matricule);
 function setEffectifs(eff) {
   PAGES.effectifs.data = eff
-    .map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut }))
+    .map((r) => ({ matricule: r.matricule, nom: r.nom, grade: r.grade, statut: r.statut, section: r.section, niveau: r.niveau }))
     .sort(byMatricule);
 }
 
