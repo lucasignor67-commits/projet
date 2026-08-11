@@ -366,6 +366,10 @@ CREATE TABLE audit_log (
 );
 CREATE INDEX idx_audit_ts ON audit_log (ts DESC);
 
+-- Notifications temps réel : annonces + sanctions (comme presence plus haut)
+ALTER PUBLICATION supabase_realtime ADD TABLE annonces;
+ALTER PUBLICATION supabase_realtime ADD TABLE sanctions;
+
 -- ── 6. VUES ─────────────────────────────────────────────────────
 CREATE VIEW v_effectifs AS
 SELECT c.matricule, c.nom, g.nom AS grade, g.section, g.niveau, c.statut, c.actif

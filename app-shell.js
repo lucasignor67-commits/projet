@@ -58,6 +58,8 @@ sidebarToggle.addEventListener('click', () => {
 // ── Navigation ──
 function navigate(page) {
   currentPage = page;
+  // Cadre large réservé à la page Statistiques (réactivé par renderStats)
+  document.querySelector('.main')?.classList.remove('main-wide');
 
   // États actifs (sidebar + boutons rapides)
   document.querySelectorAll('.nav-item.active, .quick-btn.active').forEach((el) => el.classList.remove('active'));

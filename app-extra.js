@@ -422,6 +422,8 @@ function computeStats() {
 function renderStats() {
   const root = document.getElementById('statsRoot');
   if (!root) return;
+  STATS_PERIOD = 'semaine'; // uniquement la semaine en cours
+  document.querySelector('.main')?.classList.add('main-wide'); // cadre élargi pour tout afficher
   const all = computeStats();
 
   // Résumé (bandeau du haut)
@@ -435,13 +437,10 @@ function renderStats() {
   ];
   refreshStats('statistiques');
 
-  const periods = [['semaine', 'Cette semaine'], ['mois', 'Ce mois'], ['tout', 'Tout']];
-  const periodBtns = periods.map(([id, lbl]) => `<button class="stats-period${STATS_PERIOD === id ? ' on' : ''}" data-period="${id}" type="button">${lbl}</button>`).join('');
-
   root.innerHTML = `
     <div class="panel-head">
       <div><span class="panel-kicker">Activité</span><h2 class="panel-title">STATISTIQUES PAR MILICIEN</h2></div>
-      <div class="stats-periods">${periodBtns}</div>
+      <span class="stats-week-tag">Cette semaine</span>
     </div>
     <div class="filter-row">
       <div class="search-field">
@@ -456,11 +455,8 @@ function renderStats() {
       </table>
       <div class="empty-state" id="statsEmpty" style="display:none"><div class="empty-title">AUCUN MILICIEN</div><div class="empty-sub">Aucun résultat pour cette recherche.</div></div>
     </div>
-    <div class="stats-note">Période appliquée aux actions datées. « Formations » = certifications détenues (cumul, non daté).</div>`;
+    <div class="stats-note">Actions des 7 derniers jours. « Formations » = certifications détenues (cumul, non daté).</div>`;
 
-  root.querySelectorAll('.stats-period').forEach((b) => b.addEventListener('click', () => {
-    STATS_PERIOD = b.dataset.period; renderStats();
-  }));
   const search = root.querySelector('#statsSearch');
   search.addEventListener('input', () => { STATS_Q = search.value; renderStatsBody(all); });
 
