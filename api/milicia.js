@@ -65,6 +65,49 @@ async function audit(me, action, cible, details) {
   } catch (e) { /* le journal ne doit jamais bloquer l'action */ }
 }
 
+// ── Prise de poste → patrouille automatique ──
+// Heure HH:MM en Europe/Paris (le serveur Vercel tourne en UTC ; on aligne
+// sur le fuseau des miliciens, comme le fait le front avec l'heure locale).
+function parisHM(d = new Date()) {
+  return new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Paris',
+  }).format(d);
+}
+
+// Déduit le type de patrouille à partir du nom du poste tenu sur la carte.
+function postTypeFromName(nom) {
+  const n = (nom || '').toLowerCase();
+  if (/a[ée]rien/.test(n)) return 'aerienne';
+  if (/mariti|marine|marin|naval|\bmer\b/.test(n)) return 'marine';
+  if (/terrestre|terre/.test(n)) return 'terrestre';
+  return 'fixe';
+}
+
+// Enregistre une patrouille TERMINÉE quand un milicien quitte un poste tenu ≥ 5 min.
+// Appelé avant chaque suppression de présence (quitter, changer de poste, fin de
+// service, retrait par le commandement). « Best effort » : ne bloque jamais la sortie.
+const PATROL_MIN_MS = 5 * 60 * 1000; // 5 minutes
+async function recordPatrolOnLeave(matricule) {
+  try {
+    const { data: pres } = await sb().from('presence')
+      .select('depuis, postes(nom)').eq('compte_matricule', matricule).maybeSingle();
+    if (!pres || !pres.depuis) return;
+    const debutMs = new Date(pres.depuis).getTime();
+    if (Number.isNaN(debutMs) || Date.now() - debutMs < PATROL_MIN_MS) return;
+    const nomPoste = pres.postes?.nom || null;
+    await sb().from('patrouilles').insert({
+      type: postTypeFromName(nomPoste),
+      lieu: nomPoste,
+      matricules: matricule,
+      vehicule: null,
+      debut: parisHM(new Date(debutMs)),
+      fin: parisHM(new Date()),
+      statut: 'TERMINÉE',
+      auteur_matricule: matricule,
+    });
+  } catch (e) { /* la patrouille auto ne doit jamais bloquer la sortie de poste */ }
+}
+
 export default async function handler(req, res) {
   const action = req.query.action || '';
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -904,6 +947,8 @@ export default async function handler(req, res) {
         if (!me) return fail('Non authentifié', 401);
         const { data: poste } = await sb().from('postes').select('id').eq('nom', String(body.poste || '')).maybeSingle();
         if (!poste) return fail('Poste inconnu');
+        // Changement de poste : enregistre le poste précédent en patrouille si tenu ≥ 5 min.
+        await recordPatrolOnLeave(me.matricule);
         await sb().from('presence').delete().eq('compte_matricule', me.matricule);
         const { error } = await sb().from('presence').insert({ compte_matricule: me.matricule, poste_id: poste.id });
         if (error) return fail(error.message);
@@ -912,6 +957,8 @@ export default async function handler(req, res) {
 
       case 'presence_clear': {
         if (!me) return fail('Non authentifié', 401);
+        // Quitter le poste / fin de service : enregistre en patrouille si tenu ≥ 5 min.
+        await recordPatrolOnLeave(me.matricule);
         await sb().from('presence').delete().eq('compte_matricule', me.matricule);
         return res.status(200).json({ ok: true });
       }
@@ -921,6 +968,8 @@ export default async function handler(req, res) {
         if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
         const mat = String(body.matricule || '').trim();
         if (!mat) return fail('Matricule manquant');
+        // Retrait par le commandement : enregistre en patrouille si le poste était tenu ≥ 5 min.
+        await recordPatrolOnLeave(mat);
         await sb().from('presence').delete().eq('compte_matricule', mat);
         return res.status(200).json({ ok: true });
       }
