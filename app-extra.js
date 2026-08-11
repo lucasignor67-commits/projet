@@ -225,11 +225,12 @@ let AUDIT = [];
 const AUDIT_TONE = {
   SANCTION: 'red', SANCTION_SUPPR: 'gray', BLACKLIST: 'red', BLACKLIST_MODIF: 'amber',
   BLACKLIST_SUPPR: 'gray', OPERATION: 'green', OPERATION_STATUT: 'amber', OPERATION_SUPPR: 'gray',
+  FORMATION: 'blue', FORMATION_RETRAIT: 'gray',
 };
 
 PAGES.audit = {
   title: "JOURNAL D'AUDIT",
-  desc: 'Traçabilité des actions sensibles : qui a fait quoi (sanctions, blacklist, opérations).',
+  desc: 'Traçabilité des actions sensibles : qui a fait quoi (sanctions, blacklist, opérations, formations).',
   view: 'custom',
   get data() { return AUDIT; },
   stats: (rows) => {
@@ -322,7 +323,7 @@ const STAT_COLS = [
   ['operations', 'Opérations', '🎯', 'Opérations créées'],
   ['annonces', 'Annonces', '📢', 'Annonces publiées'],
   ['recrutements', 'Recrues', '🎖️', 'Recrutements effectués'],
-  ['formations', 'Formations', '🎓', 'Certifications détenues (cumul, non daté)'],
+  ['formations', 'Formations', '🎓', 'Formations données à des miliciens sur les 7 derniers jours'],
 ];
 
 PAGES.statistiques = {
@@ -357,12 +358,14 @@ async function fetchStatsData() {
     };
   }
   const grab = async (action, key) => { try { return (await api(action))[key] || []; } catch (e) { return []; } };
-  const [rapports, patrouilles, saisies, tig, sanctions, operations, annonces, absences, contrats] = await Promise.all([
+  const grabObj = async (action, key) => { try { return (await api(action))[key] || {}; } catch (e) { return {}; } };
+  const [rapports, patrouilles, saisies, tig, sanctions, operations, annonces, absences, contrats, formationsSemaine] = await Promise.all([
     grab('rapports', 'rapports'), grab('patrouilles', 'patrouilles'), grab('saisies', 'saisies'),
     grab('tig', 'tig'), grab('sanctions', 'sanctions'), grab('operations', 'operations'),
     grab('annonces', 'annonces'), grab('absences', 'absences'), grab('contrats', 'contrats'),
+    grabObj('formations_semaine', 'formations_semaine'),
   ]);
-  return { rapports, patrouilles, saisies, tig, sanctions, operations, annonces, absences, contrats };
+  return { rapports, patrouilles, saisies, tig, sanctions, operations, annonces, absences, contrats, formationsSemaine };
 }
 
 function statsPeriodStart() {
@@ -411,13 +414,13 @@ function computeStats() {
   (d.annonces || []).filter(inPeriod).forEach((r) => bump(r.auteur_matricule, 'annonces'));
   (d.contrats || []).filter(inPeriod).forEach((r) => bump(r.auteur_matricule, 'recrutements'));
 
-  // Formations : total détenu (non daté)
-  const certifs = (PAGES.formation && PAGES.formation.certifs) || {};
-  members.forEach((m) => { m.formations = (certifs[m.matricule] || []).length; });
+  // Formations : nb de formations DONNÉES par le formateur sur les 7 derniers jours
+  const formSem = d.formationsSemaine || {};
+  members.forEach((m) => { m.formations = Number(formSem[m.matricule] || 0); });
 
-  // Score d'activité (hors formations, qui sont un cumul)
+  // Score d'activité de la semaine (formations données incluses)
   members.forEach((m) => {
-    m.total = m.patrouilles + m.rapports + m.saisies + m.tig + m.sanctions + m.operations + m.annonces + m.recrutements;
+    m.total = m.patrouilles + m.rapports + m.saisies + m.tig + m.sanctions + m.operations + m.annonces + m.recrutements + m.formations;
   });
   return members;
 }
@@ -472,7 +475,7 @@ function renderStats() {
       <button class="stats-toggle${STATS_SHOW_ALL ? ' on' : ''}" id="statsShowAll" type="button">${STATS_SHOW_ALL ? 'Tous les miliciens' : 'Actifs seulement'}</button>
     </div>
     <div class="stats-cards" id="statsCards"></div>
-    <div class="stats-note">🚓 Patrouilles · 📄 Rapports · 💶 Saisies · 🧹 TIG · ⚖️ Sanctions · 🎯 Opérations · 📢 Annonces · 🎖️ Recrues · 🎓 Formations (cumul). Actions comptées sur les 7 derniers jours.</div>`;
+    <div class="stats-note">🚓 Patrouilles · 📄 Rapports · 💶 Saisies · 🧹 TIG · ⚖️ Sanctions · 🎯 Opérations · 📢 Annonces · 🎖️ Recrues · 🎓 Formations données. Actions comptées sur les 7 derniers jours.</div>`;
 
   const search = root.querySelector('#statsSearch');
   search.addEventListener('input', () => { STATS_Q = search.value; renderStatsCards(); });
