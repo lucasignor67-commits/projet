@@ -370,6 +370,16 @@ CREATE INDEX idx_audit_ts ON audit_log (ts DESC);
 ALTER PUBLICATION supabase_realtime ADD TABLE annonces;
 ALTER PUBLICATION supabase_realtime ADD TABLE sanctions;
 
+-- ── 5e. STOCKAGE DES PHOTOS (Supabase Storage) ──────────────────
+-- Les nouvelles photos (blacklist / annonces / saisies / documents /
+-- contrats) sont uploadées comme fichiers au lieu d'être stockées en
+-- base64. Bucket PUBLIC (lecture via URL publique ; écriture via la clé
+-- service-role de l'API, qui ignore la RLS). Les anciennes photos base64
+-- déjà en base continuent de s'afficher normalement.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('milicia-photos', 'milicia-photos', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- ── 6. VUES ─────────────────────────────────────────────────────
 CREATE VIEW v_effectifs AS
 SELECT c.matricule, c.nom, g.nom AS grade, g.section, g.niveau, c.statut, c.actif

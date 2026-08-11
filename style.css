@@ -2833,3 +2833,20 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 @media (max-width: 700px) {
   .eff-list, .radio-cards { grid-template-columns: 1fr; }
 }
+
+/* ═══════════════ SKELETONS DE CHARGEMENT ═══════════════ */
+@keyframes skel-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.skel {
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, rgba(255, 255, 255, 0.06) 37%, var(--bg-elevated) 63%);
+  background-size: 200% 100%; animation: skel-shimmer 1.3s ease-in-out infinite; border-radius: 6px;
+}
+.skel-head { height: 26px; width: 220px; max-width: 60%; margin-bottom: 16px; }
+.skel-wrap { display: flex; flex-direction: column; gap: 10px; }
+.skel-row {
+  display: flex; align-items: center; gap: 12px; padding: 11px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.skel-av { width: 34px; height: 34px; border-radius: 50%; flex: none; }
+.skel-line { height: 12px; flex: 1; }
+.skel-pill { width: 72px; height: 20px; border-radius: 20px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }

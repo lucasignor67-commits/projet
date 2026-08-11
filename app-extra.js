@@ -247,6 +247,7 @@ PAGES.audit = {
 async function loadAudit() {
   const root = document.getElementById('auditRoot');
   if (!root) return;
+  root.innerHTML = skeletonBlock(7);
   try {
     AUDIT = ME && ME.demo ? [] : ((await api('audit_log')).audit || []);
   } catch (e) {
@@ -337,7 +338,7 @@ PAGES.statistiques = {
 async function loadStats() {
   const root = document.getElementById('statsRoot');
   if (!root) return;
-  root.innerHTML = '<div class="stats-loading">Agrégation des données…</div>';
+  root.innerHTML = skeletonBlock(8);
   try {
     STATS_RAW = await fetchStatsData();
   } catch (e) {
@@ -539,6 +540,46 @@ function renderStatsCards() {
 
 // La visibilité des entrées « Journal d'audit » et « Statistiques » est gérée
 // dans app-shell.js › afterLogin (classes .nav-audit / .nav-stats).
+
+/* ─────────────────────────────────────────────────────────────
+   4a. PHOTOS → SUPABASE STORAGE
+   Convertit les images base64 (data URLs) en fichiers stockés,
+   remplacées par leur URL publique. Rétro-compatible : les anciennes
+   photos base64 continuent de s'afficher, et en cas d'échec on garde
+   le base64 (aucune perte).
+   ───────────────────────────────────────────────────────────── */
+
+async function uploadPhotos(arr) {
+  if (!Array.isArray(arr) || !arr.length || (ME && ME.demo)) return arr || [];
+  const out = [];
+  for (const p of arr) {
+    if (typeof p === 'string' && p.startsWith('data:')) {
+      try { out.push((await api('photo_upload', { dataUrl: p })).url); }
+      catch (e) { out.push(p); } // fallback : on conserve le base64
+    } else {
+      out.push(p);
+    }
+  }
+  return out;
+}
+async function uploadPhoto(p) {
+  if (!p) return p;
+  return (await uploadPhotos([p]))[0];
+}
+
+/* ─────────────────────────────────────────────────────────────
+   4b. SKELETONS DE CHARGEMENT
+   ───────────────────────────────────────────────────────────── */
+
+// Bloc squelette animé (en-tête + lignes) affiché pendant les fetch.
+function skeletonBlock(n = 6) {
+  const widths = [70, 55, 80, 62, 74, 50, 66, 58];
+  let rows = '';
+  for (let i = 0; i < n; i++) {
+    rows += `<div class="skel-row"><div class="skel skel-av"></div><div class="skel skel-line" style="max-width:${widths[i % widths.length]}%"></div><div class="skel skel-pill"></div></div>`;
+  }
+  return `<div class="skel skel-head"></div><div class="skel-wrap">${rows}</div>`;
+}
 
 /* ─────────────────────────────────────────────────────────────
    5. TOPBAR : popovers Profil / Nouveau / Notifications

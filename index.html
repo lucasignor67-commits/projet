@@ -7,7 +7,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <!-- ⚠️ CACHE-BUSTING : incrémente ce numéro à CHAQUE mise à jour de fichiers
+       (style.css ou app-*.js) pour forcer les navigateurs à recharger. -->
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -280,13 +282,14 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="grille.js"></script>
-  <!-- Front découpé — l'ordre de chargement est important -->
-  <script src="app-core.js"></script>
-  <script src="app-shell.js"></script>
-  <script src="app-admin.js"></script>
-  <script src="app-content.js"></script>
-  <script src="app-main.js"></script>
-  <script src="app-extra.js"></script>
+  <script src="grille.js?v=7"></script>
+  <!-- Front découpé — l'ordre de chargement est important.
+       Le ?v=7 force le rechargement ; bumpe-le en même temps que le CSS ci-dessus. -->
+  <script src="app-core.js?v=7"></script>
+  <script src="app-shell.js?v=7"></script>
+  <script src="app-admin.js?v=7"></script>
+  <script src="app-content.js?v=7"></script>
+  <script src="app-main.js?v=7"></script>
+  <script src="app-extra.js?v=7"></script>
 </body>
 </html>

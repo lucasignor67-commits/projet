@@ -159,6 +159,7 @@ async function annonceSave(id, p) {
       ANNONCES.unshift({ id: Date.now(), auteur_matricule: ME.matricule, auteur_nom: ME.nom, ...p });
     }
   } else {
+    if (typeof uploadPhotos === 'function') p.photos = await uploadPhotos(p.photos);
     try { await api(id ? 'annonce_update' : 'annonce_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
     await reloadAnnonces();
   }
@@ -322,6 +323,7 @@ async function reloadDocuments() { try { DOCUMENTS = (await api('documents')).do
 
 async function documentSave(id, p) {
   if (!p.titre) { notify('Le titre est obligatoire.'); return; }
+  if (typeof uploadPhotos === 'function') p.photos = await uploadPhotos(p.photos);
   try { await api(id ? 'document_update' : 'document_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
   await reloadDocuments();
   closeModal(); renderDocuments(); refreshStats('documentation');
@@ -520,6 +522,7 @@ function renderCart(listId, totalId) {
 async function loadTig() {
   const root = document.getElementById('tigRoot');
   if (!root) return;
+  if (typeof skeletonBlock === 'function') root.innerHTML = skeletonBlock();
   try { if (!ME.demo) TIGS = (await api('tig')).tig || []; }
   catch (e) { root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`; return; }
   renderTig();
@@ -795,6 +798,7 @@ async function saisieSave(id, p) {
     if (id) { const s = SAISIES.find((x) => x.id === id); if (s) Object.assign(s, p); }
     else SAISIES.unshift({ id: Date.now(), par: ME.nom, auteur_matricule: ME.matricule, ...p });
   } else {
+    if (typeof uploadPhotos === 'function') p.photos = await uploadPhotos(p.photos);
     try { await api(id ? 'saisie_update' : 'saisie_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
     await reloadSaisies();
   }

@@ -315,6 +315,7 @@ async function recruitAdd(p) {
     CONTRATS.unshift({ id: Date.now(), matricule: p.matricule, nom: p.nom, telephone: p.telephone, rib: p.rib, assermentation: p.assermentation, photo: p.photo, cree_par: ME.nom, auteur_matricule: ME.matricule });
     updateHomeStats();
   } else {
+    if (typeof uploadPhoto === 'function') p.photo = await uploadPhoto(p.photo);
     try { await api('recruit_add', p); await reloadContrats(); await api('effectifs').then((eff) => setEffectifs(eff)); }
     catch (e) { show(e.message); return; }
     updateHomeStats();
@@ -502,6 +503,7 @@ async function blSave(id, p) {
     if (id) { const b = BLACKLIST.find((x) => x.id === id); if (b) Object.assign(b, p); }
     else BLACKLIST.unshift({ id: Date.now(), auteur_matricule: ME.matricule, auteur_nom: ME.nom, ...p });
   } else {
+    if (typeof uploadPhotos === 'function') p.photos = await uploadPhotos(p.photos);
     try { await api(id ? 'bl_update' : 'bl_add', id ? { id, ...p } : p); } catch (e) { notify(e.message); return; }
     await reloadBlacklist();
   }

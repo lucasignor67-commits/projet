@@ -4,6 +4,7 @@ const SANC_TYPES = ['AVERTISSEMENT', 'BLÂME', 'RÉTROGRADATION', 'EXCLUSION'];
 async function loadSanctions() {
   const root = document.getElementById('sancRoot');
   if (!root) return;
+  if (typeof skeletonBlock === 'function') root.innerHTML = skeletonBlock();
   try {
     if (!ME.demo) SANCTIONS = (await api('sanctions')).sanctions || [];
   } catch (e) {
@@ -128,6 +129,7 @@ async function sanctionDelete(id) {
 async function loadRapports() {
   const root = document.getElementById('rapRoot');
   if (!root) return;
+  if (typeof skeletonBlock === 'function') root.innerHTML = skeletonBlock();
   try {
     if (!ME.demo) RAPPORTS = (await api('rapports')).rapports || [];
   } catch (e) {
@@ -643,6 +645,7 @@ const opCanManage = () => !!(ME && (ME.section === 'comando' || ME.section === '
 async function loadOperations() {
   const root = document.getElementById('opRoot');
   if (!root) return;
+  if (typeof skeletonBlock === 'function') root.innerHTML = skeletonBlock();
   try { OPERATIONS = (await api('operations')).operations || []; }
   catch (e) { root.innerHTML = `<div class="empty-state"><div class="empty-title">ERREUR</div><div class="empty-sub">${e.message}</div></div>`; return; }
   renderOperations();
