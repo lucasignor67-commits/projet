@@ -41,6 +41,7 @@ function renderSanctions() {
         <input type="text" id="sancSearch" placeholder="Rechercher dans la rubrique" autocomplete="off">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
+      ${typeof exportBtns === 'function' ? exportBtns('sanctions') : ''}
       ${canManage ? `<button class="btn btn-primary" id="sancNew">
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         NOUVELLE SANCTION
@@ -170,6 +171,7 @@ function renderRapports() {
       <div><span class="panel-kicker">Registre</span><h2 class="panel-title">RAPPORTS</h2></div>
       <div class="map-tools">
         <span class="panel-count">${RAPPORTS.length}</span>
+        ${typeof exportBtns === 'function' ? exportBtns('rapports') : ''}
         <button class="btn btn-primary btn-sm" id="rapNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVEAU RAPPORT</button>
       </div>
     </div>
@@ -942,7 +944,8 @@ function renderPlanMarkers() {
   PLAN_MARKERS.forEach((m) => {
     if (!planStepVisible(m.step)) return;
     const el = document.createElement('div');
-    el.className = `plan-marker team-${m.team}${PLAN_SEL === m.id ? ' sel' : ''}`;
+    const entering = PLAN_ANIM && (m.step || 0) === PLAN_ANIM.phase;
+    el.className = `plan-marker team-${m.team}${PLAN_SEL === m.id ? ' sel' : ''}${PLAN_ANIM ? ' pm-live' : ''}${entering ? ' pm-enter' : ''}`;
     el.style.left = m.x + '%'; el.style.top = m.y + '%';
     el.dataset.id = m.id;
     el.innerHTML = `<span class="pm-ico">${OP_MARK_ICON[m.type] || '•'}</span>${m.label ? `<span class="pm-lbl">${escapeHtml(m.label)}</span>` : ''}`;
@@ -990,10 +993,11 @@ function renderPlanShapes() {
     const sel = PLAN_SEL === s.id;
     const sw = sel ? 4 : (s.type === 'arrow' ? 3 : 2.4);
     const idA = s.id != null ? ` data-id="${s.id}"` : '';
-    if (s.type === 'path') return `<polyline class="pl-shape"${idA} points="${s.points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
-    if (s.type === 'zone') return `<polygon class="pl-shape"${idA} points="${s.points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="${col}22" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
-    if (s.type === 'arrow') { const [a, b] = s.points; if (!b) return ''; return `<line class="pl-shape"${idA} x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" marker-end="url(#pl-arrow)"/>`; }
-    if (s.type === 'circle') return `<ellipse class="pl-shape"${idA} cx="${s.x}" cy="${s.y}" rx="${s.r}" ry="${(s.r * ratio).toFixed(2)}" fill="${col}18" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke"/>`;
+    const en = (PLAN_ANIM && (s.step || 0) === PLAN_ANIM.phase) ? ' data-enter="1"' : '';
+    if (s.type === 'path') return `<polyline class="pl-shape"${idA}${en} points="${s.points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (s.type === 'zone') return `<polygon class="pl-shape"${idA}${en} points="${s.points.map((p) => `${p.x},${p.y}`).join(' ')}" fill="${col}22" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+    if (s.type === 'arrow') { const [a, b] = s.points; if (!b) return ''; return `<line class="pl-shape"${idA}${en} x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke" marker-end="url(#pl-arrow)"/>`; }
+    if (s.type === 'circle') return `<ellipse class="pl-shape"${idA}${en} cx="${s.x}" cy="${s.y}" rx="${s.r}" ry="${(s.r * ratio).toFixed(2)}" fill="${col}18" stroke="${col}" stroke-width="${sw}" vector-effect="non-scaling-stroke"/>`;
     return '';
   };
 
@@ -1010,6 +1014,8 @@ function renderPlanShapes() {
 
   svg.innerHTML = `<defs><marker id="pl-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill="context-stroke"/></marker></defs>${finished}${preview}`;
 
+  if (PLAN_ANIM) animateEnteringShapes(svg);
+
   if (canManage && !PLAN_ANIM) {
     svg.querySelectorAll('.pl-shape').forEach((el) => el.addEventListener('click', (e) => {
       if (PLAN_TOOL !== 'select') return;
@@ -1019,6 +1025,29 @@ function renderPlanShapes() {
       renderPlanShapes(); renderPlanMarkers(); updateSelBar();
     }));
   }
+}
+
+// Animation d'apparition des tracés en mode lecture : tracé progressif (lignes/chemins)
+// et éclosion (zones/rayons).
+function animateEnteringShapes(svg) {
+  svg.querySelectorAll('[data-enter="1"]').forEach((el, i) => {
+    const tag = el.tagName.toLowerCase();
+    const delay = Math.min(i * 90, 400);
+    if (tag === 'polyline' || tag === 'line') {
+      let len = 0;
+      try { len = el.getTotalLength(); } catch (e) { len = 0; }
+      if (len > 0) {
+        el.style.strokeDasharray = len;
+        el.style.strokeDashoffset = len;
+        el.getBoundingClientRect(); // force le reflow avant la transition
+        el.style.transition = `stroke-dashoffset .9s ease ${delay}ms`;
+        requestAnimationFrame(() => { el.style.strokeDashoffset = '0'; });
+      }
+    } else {
+      el.style.animationDelay = delay + 'ms';
+      el.classList.add('pl-pop');
+    }
+  });
 }
 
 function planShapeClick(x, y) {
@@ -1132,7 +1161,7 @@ function updateSelBar() {
 function enterAnim() {
   if (PLAN_DRAW) cancelDraw();
   PLAN_SEL = null; updateSelBar();
-  PLAN_ANIM = { phase: 0, playing: false, timer: null };
+  PLAN_ANIM = { phase: 0, playing: false, timer: null, speed: 1600 };
   const tb = document.getElementById('plannerToolbar'); if (tb) tb.style.display = 'none';
   const db = document.getElementById('planDrawBar'); if (db) db.hidden = true;
   const btn = document.getElementById('planAnim'); if (btn) btn.textContent = '■ Quitter';
@@ -1155,16 +1184,29 @@ function animGoto(p) {
   renderAnimBar(); renderPlanMarkers(); renderPlanShapes();
 }
 
+function animStop() {
+  if (!PLAN_ANIM) return;
+  if (PLAN_ANIM.timer) { clearInterval(PLAN_ANIM.timer); PLAN_ANIM.timer = null; }
+  PLAN_ANIM.playing = false;
+}
+
 function animPlayToggle() {
   if (!PLAN_ANIM) return;
-  if (PLAN_ANIM.playing) { clearInterval(PLAN_ANIM.timer); PLAN_ANIM.timer = null; PLAN_ANIM.playing = false; renderAnimBar(); return; }
-  if (PLAN_ANIM.phase >= PLAN_PHASES.length) PLAN_ANIM.phase = 0;
+  if (PLAN_ANIM.playing) { animStop(); renderAnimBar(); return; }
+  if (PLAN_ANIM.phase >= PLAN_PHASES.length) { animGoto(0); }
   PLAN_ANIM.playing = true;
   PLAN_ANIM.timer = setInterval(() => {
-    if (!PLAN_ANIM || PLAN_ANIM.phase >= PLAN_PHASES.length) { if (PLAN_ANIM) { clearInterval(PLAN_ANIM.timer); PLAN_ANIM.timer = null; PLAN_ANIM.playing = false; renderAnimBar(); } return; }
+    if (!PLAN_ANIM || PLAN_ANIM.phase >= PLAN_PHASES.length) { animStop(); renderAnimBar(); return; }
     animGoto(PLAN_ANIM.phase + 1);
-  }, 1700);
+  }, PLAN_ANIM.speed);
   renderAnimBar(); renderPlanMarkers(); renderPlanShapes();
+}
+
+function cycleAnimSpeed() {
+  if (!PLAN_ANIM) return;
+  const order = [1600, 900, 2600]; // 1× → 2× → 0.5×
+  PLAN_ANIM.speed = order[(order.indexOf(PLAN_ANIM.speed) + 1) % order.length];
+  if (PLAN_ANIM.playing) { animStop(); animPlayToggle(); } else renderAnimBar();
 }
 
 function renderAnimBar() {
@@ -1172,15 +1214,33 @@ function renderAnimBar() {
   if (!bar || !PLAN_ANIM) return;
   const N = PLAN_PHASES.length, p = PLAN_ANIM.phase;
   const name = p === 0 ? 'Mise en place (éléments « Toujours »)' : (PLAN_PHASES[p - 1] ? PLAN_PHASES[p - 1].name : '');
+  const pct = N ? Math.round((p / N) * 100) : 0;
+  const speedLbl = PLAN_ANIM.speed <= 900 ? '2×' : (PLAN_ANIM.speed >= 2600 ? '0.5×' : '1×');
+  let dots = '';
+  for (let i = 0; i <= N; i++) {
+    const dl = i === 0 ? 'Mise en place' : (PLAN_PHASES[i - 1] ? PLAN_PHASES[i - 1].name : 'Phase ' + i);
+    dots += `<button class="anim-dot${i === p ? ' on' : ''}${i < p ? ' done' : ''}" data-go="${i}" type="button" title="${escapeHtml(dl)}">${i}</button>`;
+  }
   bar.hidden = false;
   bar.innerHTML = `
-    <button class="btn btn-ghost btn-sm" id="animPrev" type="button"${p <= 0 ? ' disabled' : ''}>◀</button>
-    <button class="btn btn-ghost btn-sm" id="animPlay" type="button">${PLAN_ANIM.playing ? '⏸ Pause' : '▶ Lecture'}</button>
-    <button class="btn btn-ghost btn-sm" id="animNext" type="button"${p >= N ? ' disabled' : ''}>▶</button>
-    <span class="anim-phase"><b>Phase ${p} / ${N}</b>${name ? ' — ' + escapeHtml(name) : ''}</span>`;
-  bar.querySelector('#animPrev').addEventListener('click', () => animGoto(p - 1));
-  bar.querySelector('#animNext').addEventListener('click', () => animGoto(p + 1));
+    <div class="anim-controls">
+      <button class="btn btn-ghost btn-sm" id="animPrev" type="button"${p <= 0 ? ' disabled' : ''}>◀</button>
+      <button class="btn btn-primary btn-sm" id="animPlay" type="button">${PLAN_ANIM.playing ? '⏸ Pause' : '▶ Lecture'}</button>
+      <button class="btn btn-ghost btn-sm" id="animNext" type="button"${p >= N ? ' disabled' : ''}>▶</button>
+      <button class="btn btn-ghost btn-sm" id="animRestart" type="button" title="Recommencer">↺</button>
+      <button class="btn btn-ghost btn-sm" id="animSpeed" type="button" title="Vitesse de lecture">${speedLbl}</button>
+      <span class="anim-phase"><b>Phase ${p} / ${N}</b>${name ? ' — ' + escapeHtml(name) : ''}</span>
+    </div>
+    <div class="anim-timeline">
+      <div class="anim-track"><div class="anim-fill" style="width:${pct}%"></div></div>
+      <div class="anim-dots">${dots}</div>
+    </div>`;
+  bar.querySelector('#animPrev').addEventListener('click', () => { animStop(); animGoto(p - 1); });
+  bar.querySelector('#animNext').addEventListener('click', () => { animStop(); animGoto(p + 1); });
   bar.querySelector('#animPlay').addEventListener('click', animPlayToggle);
+  bar.querySelector('#animRestart').addEventListener('click', () => { animStop(); animGoto(0); });
+  bar.querySelector('#animSpeed').addEventListener('click', cycleAnimSpeed);
+  bar.querySelectorAll('.anim-dot').forEach((d) => d.addEventListener('click', () => { animStop(); animGoto(+d.dataset.go); }));
 }
 
 async function operationSavePlan(id, plan) {

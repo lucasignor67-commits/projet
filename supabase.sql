@@ -352,6 +352,20 @@ CREATE TABLE operations (
   date_creation    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ── 5d. JOURNAL D'AUDIT (actions disciplinaires / opérationnelles) ──
+-- Trace « qui a fait quoi » pour sanctions, blacklist et opérations.
+-- Les actions sur les comptes sont déjà tracées dans journal_comptes.
+CREATE TABLE audit_log (
+  id               BIGSERIAL PRIMARY KEY,
+  ts               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  acteur_matricule VARCHAR(10),
+  acteur_nom       VARCHAR(120),
+  action           VARCHAR(60) NOT NULL,
+  cible            VARCHAR(120),
+  details          TEXT
+);
+CREATE INDEX idx_audit_ts ON audit_log (ts DESC);
+
 -- ── 6. VUES ─────────────────────────────────────────────────────
 CREATE VIEW v_effectifs AS
 SELECT c.matricule, c.nom, g.nom AS grade, g.section, g.niveau, c.statut, c.actif

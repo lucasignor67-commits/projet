@@ -295,11 +295,15 @@ async function afterLogin() {
   const canAdmin = ME.peut_ajouter_effectif || ME.peut_modifier_comptes || ME.peut_voir_mdp;
   const canFormateur = ME.formateur || canAdmin;
   const canRecruteur = ME.recruteur || canAdmin;
+  const canAudit = ME.section === 'comando' || ME.section === 'direction';
+  const canStats = canAudit || canFormateur || canAdmin;
   document.querySelectorAll('.nav-admin').forEach((el) => { el.hidden = !canAdmin; });
   document.querySelectorAll('.nav-formateur').forEach((el) => { el.hidden = !canFormateur; });
   document.querySelectorAll('.nav-recruteur').forEach((el) => { el.hidden = !canRecruteur; });
+  document.querySelectorAll('.nav-audit').forEach((el) => { el.hidden = !canAudit; });
+  document.querySelectorAll('.nav-stats').forEach((el) => { el.hidden = !canStats; });
   const divider = document.querySelector('.nav-divider.nav-reserved');
-  if (divider) divider.hidden = !(canFormateur || canAdmin || canRecruteur);
+  if (divider) divider.hidden = !(canFormateur || canAdmin || canRecruteur || canAudit);
 
   buildHomeGrid();
   updateHomeStats();
@@ -310,8 +314,9 @@ async function afterLogin() {
   setupRealtime();
 }
 
-// Abonnement Supabase Realtime : rafraîchit la présence dès qu'un poste change
+// Abonnement Supabase Realtime : présence + notifications live (annonces, sanctions)
 let RT_CHANNEL = null;
+let RT_READY_AT = 0; // ignore les évènements « historiques » reçus au tout début
 async function setupRealtime() {
   if (!ME || ME.demo || RT_CHANNEL || !window.supabase) return;
   try {
@@ -319,11 +324,40 @@ async function setupRealtime() {
     if (!cfg.url || !cfg.anonKey) return;
     const sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: false } });
     RT_CHANNEL = sb
-      .channel('presence-live')
+      .channel('milicia-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'presence' }, () => loadPresence())
-      .subscribe();
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'annonces' }, (p) => onRealtimeInsert('annonce', p))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sanctions' }, (p) => onRealtimeInsert('sanction', p))
+      .subscribe((status) => { if (status === 'SUBSCRIBED') RT_READY_AT = Date.now(); });
   } catch (e) {
     console.warn('Realtime indisponible :', e.message);
   }
+}
+
+// Notification live + rafraîchissement de la page concernée si elle est ouverte
+function onRealtimeInsert(kind, payload) {
+  if (!RT_READY_AT || Date.now() - RT_READY_AT < 800) return; // évite le flux initial
+  const row = payload && payload.new ? payload.new : {};
+  // N'annonce pas ses propres actions
+  if (row.auteur_matricule && ME && row.auteur_matricule === ME.matricule) return;
+  if (kind === 'annonce') {
+    const urgent = row.priorite === 'URGENTE';
+    notify(`Nouvelle annonce : ${row.titre || 'sans titre'}`, urgent ? 'error' : 'info');
+    if (currentPage === 'communications' && typeof loadAnnonces === 'function') loadAnnonces();
+    updateHomeStats();
+  } else if (kind === 'sanction') {
+    notify(`Nouvelle sanction : ${row.membre || '—'}`, 'info');
+    if (currentPage === 'sanctions' && typeof loadSanctions === 'function') loadSanctions();
+  }
+  bumpNotifBadge();
+}
+
+// Incrémente la pastille de notifications de la topbar
+function bumpNotifBadge() {
+  const b = document.querySelector('.notif-badge');
+  if (!b) return;
+  const n = (parseInt(b.textContent, 10) || 0) + 1;
+  b.textContent = n > 99 ? '99+' : String(n);
+  b.classList.remove('badge-pulse'); void b.offsetWidth; b.classList.add('badge-pulse');
 }
 

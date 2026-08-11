@@ -147,6 +147,14 @@
           <svg viewBox="0 0 24 24"><path d="M12 3L2 8l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M6 10.5V15c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 8v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           <span>Gestion des formations</span>
         </a>
+        <a class="nav-item nav-stats" href="#" data-page="statistiques" hidden>
+          <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Statistiques</span>
+        </a>
+        <a class="nav-item nav-audit" href="#" data-page="audit" hidden>
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Journal d'audit</span>
+        </a>
       </nav>
     </aside>
 
@@ -273,11 +281,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="grille.js"></script>
-  <!-- app.js découpé — l'ordre de chargement est important -->
+  <!-- Front découpé — l'ordre de chargement est important -->
   <script src="app-core.js"></script>
   <script src="app-shell.js"></script>
   <script src="app-admin.js"></script>
   <script src="app-content.js"></script>
   <script src="app-main.js"></script>
+  <script src="app-extra.js"></script>
 </body>
 </html>

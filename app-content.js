@@ -552,6 +552,7 @@ function renderTig() {
       <div><span class="panel-kicker">Sanction</span><h2 class="panel-title">TIG EN COURS ET TERMINÉS</h2></div>
       <div class="map-tools">
         <span class="panel-count">${TIGS.length}</span>
+        ${typeof exportBtns === 'function' ? exportBtns('tig') : ''}
         <button class="btn btn-primary btn-sm" id="tigNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>NOUVEAU TIG</button>
       </div>
     </div>
