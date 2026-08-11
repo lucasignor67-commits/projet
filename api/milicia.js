@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════
 //  MILICIA — API serverless (Vercel) connectée à Supabase
-//  Route : /api/milicia?action=...   (appelée par app.js)
+//  Route : /api/milicia?action=...   (appelée par le front app-*.js)
 //
 //  Variables d'environnement à définir sur Vercel :
 //    SUPABASE_URL                 (Project URL)
@@ -50,6 +50,21 @@ async function permsOf(matricule) {
   return data || null;
 }
 
+// ── Journal d'audit (actions disciplinaires / opérationnelles) ──
+// Écriture « best effort » : ne jamais faire échouer une mutation si le log échoue.
+async function audit(me, action, cible, details) {
+  if (!me) return;
+  try {
+    await sb().from('audit_log').insert({
+      acteur_matricule: me.matricule,
+      acteur_nom: me.nom,
+      action: String(action).slice(0, 60),
+      cible: cible ? String(cible).slice(0, 120) : null,
+      details: details ? String(details).slice(0, 500) : null,
+    });
+  } catch (e) { /* le journal ne doit jamais bloquer l'action */ }
+}
+
 export default async function handler(req, res) {
   const action = req.query.action || '';
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -95,6 +110,16 @@ export default async function handler(req, res) {
           url: process.env.SUPABASE_URL || '',
           anonKey: process.env.SUPABASE_ANON_KEY || '',
         });
+
+      // ── Journal d'audit (consultation réservée Commandement / Direction) ──
+      case 'audit_log': {
+        if (!me) return fail('Non authentifié', 401);
+        if (me.section !== 'comando' && me.section !== 'direction') return fail('Accès réservé au Commandement / Direction', 403);
+        const { data, error } = await sb().from('audit_log')
+          .select('*').order('ts', { ascending: false }).limit(300);
+        if (error) throw error;
+        return res.status(200).json({ audit: data });
+      }
 
       case 'effectifs': {
         if (!me) return fail('Non authentifié', 401);
@@ -362,6 +387,7 @@ export default async function handler(req, res) {
         if (!row.nom || !row.motif) return fail('Nom et motif obligatoires');
         const { error } = await sb().from('blacklist').insert(row);
         if (error) return fail(error.message);
+        await audit(me, 'BLACKLIST', row.nom, row.motif);
         return res.status(200).json({ ok: true });
       }
 
@@ -381,6 +407,7 @@ export default async function handler(req, res) {
         if (!patch.nom || !patch.motif) return fail('Nom et motif obligatoires');
         const { error } = await sb().from('blacklist').update(patch).eq('id', id);
         if (error) return fail(error.message);
+        await audit(me, 'BLACKLIST_MODIF', patch.nom, patch.actif ? 'Mise à jour' : 'Levée');
         return res.status(200).json({ ok: true });
       }
 
@@ -389,8 +416,10 @@ export default async function handler(req, res) {
         if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
         const id = Number(body.id || 0);
         if (!id) return fail('id manquant');
+        const { data: old } = await sb().from('blacklist').select('nom').eq('id', id).maybeSingle();
         const { error } = await sb().from('blacklist').delete().eq('id', id);
         if (error) return fail(error.message);
+        await audit(me, 'BLACKLIST_SUPPR', old?.nom, `#${id}`);
         return res.status(200).json({ ok: true });
       }
 
@@ -542,6 +571,7 @@ export default async function handler(req, res) {
         if (!row.code || !row.objectif) return fail('Code et objectif obligatoires');
         const { error } = await sb().from('operations').insert(row);
         if (error) return fail(error.message);
+        await audit(me, 'OPERATION', row.code, `Créée — ${row.statut}`);
         return res.status(200).json({ ok: true });
       }
 
@@ -574,8 +604,10 @@ export default async function handler(req, res) {
         if (!id || !STA.includes(body.statut)) return fail('Paramètres invalides');
         const patch = { statut: body.statut };
         if (typeof body.compte_rendu !== 'undefined') patch.compte_rendu = String(body.compte_rendu || '').trim() || null;
+        const { data: opc } = await sb().from('operations').select('code').eq('id', id).maybeSingle();
         const { error } = await sb().from('operations').update(patch).eq('id', id);
         if (error) return fail(error.message);
+        await audit(me, 'OPERATION_STATUT', opc?.code || `#${id}`, `→ ${body.statut}`);
         return res.status(200).json({ ok: true });
       }
 
@@ -584,8 +616,10 @@ export default async function handler(req, res) {
         if (me.section !== 'comando' && me.section !== 'direction') return fail('Réservé au Commandement / Direction', 403);
         const id = Number(body.id || 0);
         if (!id) return fail('id manquant');
+        const { data: opd } = await sb().from('operations').select('code').eq('id', id).maybeSingle();
         const { error } = await sb().from('operations').delete().eq('id', id);
         if (error) return fail(error.message);
+        await audit(me, 'OPERATION_SUPPR', opd?.code || `#${id}`, null);
         return res.status(200).json({ ok: true });
       }
 
@@ -623,6 +657,7 @@ export default async function handler(req, res) {
         if (!row.membre || !row.motif || !row.date_sanction) return fail('Champs obligatoires manquants');
         const { error } = await sb().from('sanctions').insert(row);
         if (error) return fail(error.message);
+        await audit(me, 'SANCTION', row.membre, `${row.type} — ${row.motif}`);
         return res.status(200).json({ ok: true });
       }
 
@@ -631,8 +666,10 @@ export default async function handler(req, res) {
         if (me.section !== 'comando' && me.section !== 'direction') return fail('Seuls le Commandement et la Direction peuvent supprimer une sanction', 403);
         const id = Number(body.id || 0);
         if (!id) return fail('id manquant');
+        const { data: old } = await sb().from('sanctions').select('membre,type').eq('id', id).maybeSingle();
         const { error } = await sb().from('sanctions').delete().eq('id', id);
         if (error) return fail(error.message);
+        await audit(me, 'SANCTION_SUPPR', old?.membre, old ? `${old.type} supprimée` : `#${id}`);
         return res.status(200).json({ ok: true });
       }
 
