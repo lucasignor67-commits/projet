@@ -304,22 +304,24 @@ function renderAudit() {
    ───────────────────────────────────────────────────────────── */
 
 let STATS_RAW = null;
-let STATS_PERIOD = 'semaine';           // semaine | mois | tout
-let STATS_SORT = { key: 'total', dir: 'desc' };
+let STATS_PERIOD = 'semaine';           // uniquement la semaine en cours
+let STATS_SORT_MODE = 'total';          // total | matricule | nom
+let STATS_SHOW_ALL = false;             // false = seulement les actifs de la semaine
 let STATS_Q = '';
 let STATS_SUMMARY = [['Membres', 0]];
+let _statsAll = [];
 
-// Colonnes agrégées (clé interne → libellé + infobulle)
+// Métriques agrégées : [clé, libellé, icône, infobulle]
 const STAT_COLS = [
-  ['patrouilles', 'Patrouilles', 'Patrouilles créées ou où le matricule est présent'],
-  ['rapports', 'Rapports', 'Rapports rédigés'],
-  ['saisies', 'Saisies', 'Saisies créées ou où le matricule est présent'],
-  ['tig', 'TIG', 'TIG assignés'],
-  ['sanctions', 'Sanctions', 'Sanctions prononcées'],
-  ['operations', 'Opérations', 'Opérations créées'],
-  ['annonces', 'Annonces', 'Annonces publiées'],
-  ['recrutements', 'Recrues', 'Recrutements effectués'],
-  ['formations', 'Formations', 'Certifications détenues (total)'],
+  ['patrouilles', 'Patrouilles', '🚓', 'Patrouilles créées ou où le matricule est présent'],
+  ['rapports', 'Rapports', '📄', 'Rapports rédigés'],
+  ['saisies', 'Saisies', '💶', 'Saisies créées ou où le matricule est présent'],
+  ['tig', 'TIG', '🧹', 'TIG assignés'],
+  ['sanctions', 'Sanctions', '⚖️', 'Sanctions prononcées'],
+  ['operations', 'Opérations', '🎯', 'Opérations créées'],
+  ['annonces', 'Annonces', '📢', 'Annonces publiées'],
+  ['recrutements', 'Recrues', '🎖️', 'Recrutements effectués'],
+  ['formations', 'Formations', '🎓', 'Certifications détenues (cumul, non daté)'],
 ];
 
 PAGES.statistiques = {
@@ -422,100 +424,117 @@ function computeStats() {
 function renderStats() {
   const root = document.getElementById('statsRoot');
   if (!root) return;
-  STATS_PERIOD = 'semaine'; // uniquement la semaine en cours
-  document.querySelector('.main')?.classList.add('main-wide'); // cadre élargi pour tout afficher
-  const all = computeStats();
+  STATS_PERIOD = 'semaine';
+  document.querySelector('.main')?.classList.remove('main-wide'); // cartes responsives : plus besoin
+  _statsAll = computeStats();
 
   // Résumé (bandeau du haut)
-  const sum = (k) => all.reduce((s, m) => s + m[k], 0);
-  const top = all.slice().sort((a, b) => b.total - a.total)[0];
+  const sum = (k) => _statsAll.reduce((s, m) => s + m[k], 0);
+  const ranked = _statsAll.slice().sort((a, b) => b.total - a.total);
+  const top = ranked[0];
   STATS_SUMMARY = [
-    ['Actifs', all.filter((m) => m.total > 0).length],
+    ['Actifs', _statsAll.filter((m) => m.total > 0).length],
     ['Patrouilles', sum('patrouilles')],
     ['Rapports', sum('rapports')],
-    ['Plus actif', top && top.total ? `${top.matricule}` : '—'],
+    ['Plus actif', top && top.total ? top.matricule : '—'],
   ];
   refreshStats('statistiques');
 
+  // Podium : 3 plus actifs de la semaine
+  const podium = ranked.filter((m) => m.total > 0).slice(0, 3);
+  const medals = ['🥇', '🥈', '🥉'];
+  const podiumHTML = podium.length ? `<div class="stats-podium">${podium.map((m, i) => `
+    <div class="podium-card p${i + 1}">
+      <div class="podium-medal">${medals[i]}</div>
+      <div class="podium-info">
+        <span class="podium-name">${escapeHtml(m.nom)}</span>
+        <span class="podium-mat">Matricule ${escapeHtml(m.matricule)}</span>
+      </div>
+      <div class="podium-score"><b>${m.total}</b><span>actions</span></div>
+    </div>`).join('')}</div>` : '';
+
+  const sorts = [['total', 'Plus actifs'], ['matricule', 'Matricule'], ['nom', 'Nom']];
+  const sortBtns = sorts.map(([id, lbl]) => `<button class="stats-sort${STATS_SORT_MODE === id ? ' on' : ''}" data-sort="${id}" type="button">${lbl}</button>`).join('');
+
   root.innerHTML = `
     <div class="panel-head">
-      <div><span class="panel-kicker">Activité</span><h2 class="panel-title">STATISTIQUES PAR MILICIEN</h2></div>
-      <span class="stats-week-tag">Cette semaine</span>
+      <div><span class="panel-kicker">Activité de la semaine</span><h2 class="panel-title">STATISTIQUES PAR MILICIEN</h2></div>
+      <span class="stats-week-tag">7 derniers jours</span>
     </div>
-    <div class="filter-row">
-      <div class="search-field">
+    ${podiumHTML}
+    <div class="stats-controls">
+      <div class="search-field stats-search">
         <input type="text" id="statsSearch" placeholder="Rechercher un matricule ou un nom…" autocomplete="off" value="${escapeHtml(STATS_Q)}">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
+      <div class="stats-sorts"><span class="stats-ctrl-lbl">Trier</span>${sortBtns}</div>
+      <button class="stats-toggle${STATS_SHOW_ALL ? ' on' : ''}" id="statsShowAll" type="button">${STATS_SHOW_ALL ? 'Tous les miliciens' : 'Actifs seulement'}</button>
     </div>
-    <div class="table-wrap">
-      <table class="data-table stats-table">
-        <thead><tr id="statsHead"></tr></thead>
-        <tbody id="statsBody"></tbody>
-      </table>
-      <div class="empty-state" id="statsEmpty" style="display:none"><div class="empty-title">AUCUN MILICIEN</div><div class="empty-sub">Aucun résultat pour cette recherche.</div></div>
-    </div>
-    <div class="stats-note">Actions des 7 derniers jours. « Formations » = certifications détenues (cumul, non daté).</div>`;
+    <div class="stats-cards" id="statsCards"></div>
+    <div class="stats-note">🚓 Patrouilles · 📄 Rapports · 💶 Saisies · 🧹 TIG · ⚖️ Sanctions · 🎯 Opérations · 📢 Annonces · 🎖️ Recrues · 🎓 Formations (cumul). Actions comptées sur les 7 derniers jours.</div>`;
 
   const search = root.querySelector('#statsSearch');
-  search.addEventListener('input', () => { STATS_Q = search.value; renderStatsBody(all); });
-
-  renderStatsHead();
-  renderStatsBody(all);
-}
-
-function renderStatsHead() {
-  const head = document.getElementById('statsHead');
-  if (!head) return;
-  const arrow = (k) => STATS_SORT.key === k ? (STATS_SORT.dir === 'desc' ? ' ▾' : ' ▴') : '';
-  const cols = [['matricule', 'N°'], ['nom', 'Nom'], ['grade', 'Grade']]
-    .concat(STAT_COLS.map(([k, l]) => [k, l]))
-    .concat([['total', 'Total']]);
-  head.innerHTML = cols.map(([k, l]) => {
-    const tip = (STAT_COLS.find((c) => c[0] === k) || [])[2];
-    const num = !['matricule', 'nom', 'grade'].includes(k);
-    return `<th class="sortable${num ? ' th-right' : ''}${k === 'total' ? ' col-total' : ''}" data-sort="${k}"${tip ? ` title="${escapeHtml(tip)}"` : ''}>${l}${arrow(k)}</th>`;
-  }).join('');
-  head.querySelectorAll('.sortable').forEach((th) => th.addEventListener('click', () => {
-    const k = th.dataset.sort;
-    if (STATS_SORT.key === k) STATS_SORT.dir = STATS_SORT.dir === 'desc' ? 'asc' : 'desc';
-    else { STATS_SORT.key = k; STATS_SORT.dir = ['matricule', 'nom', 'grade'].includes(k) ? 'asc' : 'desc'; }
-    renderStatsHead(); renderStatsBodyCached();
+  search.addEventListener('input', () => { STATS_Q = search.value; renderStatsCards(); });
+  root.querySelectorAll('.stats-sort').forEach((b) => b.addEventListener('click', () => {
+    STATS_SORT_MODE = b.dataset.sort;
+    root.querySelectorAll('.stats-sort').forEach((x) => x.classList.toggle('on', x === b));
+    renderStatsCards();
   }));
-}
-
-let _statsAll = [];
-function renderStatsBody(all) { _statsAll = all; renderStatsBodyCached(); }
-function renderStatsBodyCached() {
-  const body = document.getElementById('statsBody');
-  if (!body) return;
-  const q = STATS_Q.trim().toLowerCase();
-  let rows = _statsAll.filter((m) => !q || String(m.matricule).toLowerCase().includes(q) || String(m.nom || '').toLowerCase().includes(q));
-
-  const { key, dir } = STATS_SORT;
-  const mul = dir === 'desc' ? -1 : 1;
-  rows = rows.slice().sort((a, b) => {
-    let va = a[key], vb = b[key];
-    if (key === 'matricule') { va = Number(a.matricule); vb = Number(b.matricule); }
-    if (typeof va === 'string' || typeof vb === 'string') return String(va || '').localeCompare(String(vb || '')) * mul;
-    return (va - vb) * mul;
+  root.querySelector('#statsShowAll').addEventListener('click', (e) => {
+    STATS_SHOW_ALL = !STATS_SHOW_ALL;
+    e.currentTarget.classList.toggle('on', STATS_SHOW_ALL);
+    e.currentTarget.textContent = STATS_SHOW_ALL ? 'Tous les miliciens' : 'Actifs seulement';
+    renderStatsCards();
   });
 
-  const maxTotal = Math.max(1, ..._statsAll.map((m) => m.total));
-  const cell = (v) => `<td class="th-right stat-num${v ? '' : ' zero'}">${v || '·'}</td>`;
-  body.innerHTML = rows.map((m) => {
-    const pct = Math.round((m.total / maxTotal) * 100);
-    return `<tr>
-      <td class="stat-mat">${escapeHtml(m.matricule)}</td>
-      <td>${escapeHtml(m.nom)}</td>
-      <td class="stat-grade">${escapeHtml(m.grade || '—')}</td>
-      ${STAT_COLS.map(([k]) => cell(m[k])).join('')}
-      <td class="th-right col-total"><span class="stat-total-wrap"><span class="stat-total-bar" style="width:${pct}%"></span><b>${m.total}</b></span></td>
-    </tr>`;
-  }).join('');
+  renderStatsCards();
+}
 
-  const empty = document.getElementById('statsEmpty');
-  if (empty) empty.style.display = rows.length ? 'none' : 'block';
+function sortStats(rows) {
+  const r = rows.slice();
+  if (STATS_SORT_MODE === 'matricule') return r.sort((a, b) => Number(a.matricule) - Number(b.matricule));
+  if (STATS_SORT_MODE === 'nom') return r.sort((a, b) => String(a.nom || '').localeCompare(String(b.nom || '')));
+  return r.sort((a, b) => (b.total - a.total) || (Number(a.matricule) - Number(b.matricule)));
+}
+
+function renderStatsCards() {
+  const wrap = document.getElementById('statsCards');
+  if (!wrap) return;
+  const q = STATS_Q.trim().toLowerCase();
+  let rows = _statsAll.filter((m) => !q || String(m.matricule).toLowerCase().includes(q) || String(m.nom || '').toLowerCase().includes(q));
+  // Par défaut : seulement les actifs de la semaine (sauf recherche ou bouton « Tous »)
+  if (!STATS_SHOW_ALL && !q) rows = rows.filter((m) => m.total > 0);
+  rows = sortStats(rows);
+
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-title">${STATS_SHOW_ALL || q ? 'AUCUN RÉSULTAT' : 'AUCUNE ACTIVITÉ CETTE SEMAINE'}</div><div class="empty-sub">${q ? 'Aucun milicien ne correspond à la recherche.' : 'Cliquez « Actifs seulement » pour voir tout le monde.'}</div></div>`;
+    return;
+  }
+
+  const maxTotal = Math.max(1, ..._statsAll.map((m) => m.total));
+  const showRank = STATS_SORT_MODE === 'total';
+  wrap.innerHTML = rows.map((m, i) => {
+    const pct = Math.round((m.total / maxTotal) * 100);
+    const chips = STAT_COLS.map(([k, l, ic, tip]) => `
+      <div class="mstat${m[k] ? '' : ' zero'}" title="${escapeHtml(tip)}">
+        <span class="mstat-ic">${ic}</span>
+        <span class="mstat-val">${m[k]}</span>
+        <span class="mstat-lbl">${l}</span>
+      </div>`).join('');
+    return `<article class="mcard${m.total ? '' : ' inactive'}">
+      <div class="mcard-head">
+        ${showRank ? `<span class="mcard-rank">${i + 1}</span>` : ''}
+        <span class="mcard-mat">${escapeHtml(m.matricule)}</span>
+        <div class="mcard-id">
+          <span class="mcard-name">${escapeHtml(m.nom)}</span>
+          <span class="mcard-grade">${escapeHtml(m.grade || '—')}</span>
+        </div>
+        <div class="mcard-total"><b>${m.total}</b><span>actions</span></div>
+      </div>
+      <div class="mcard-bar"><span style="width:${pct}%"></span></div>
+      <div class="mcard-stats">${chips}</div>
+    </article>`;
+  }).join('');
 }
 
 // La visibilité des entrées « Journal d'audit » et « Statistiques » est gérée
