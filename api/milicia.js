@@ -111,6 +111,23 @@ export default async function handler(req, res) {
           anonKey: process.env.SUPABASE_ANON_KEY || '',
         });
 
+      // ── Upload d'une photo vers Supabase Storage (bucket public "milicia-photos") ──
+      case 'photo_upload': {
+        if (!me) return fail('Non authentifié', 401);
+        const dataUrl = String(body.dataUrl || '');
+        const m = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+        if (!m) return fail('Image invalide');
+        const mime = m[1];
+        const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        const buf = Buffer.from(m[2], 'base64');
+        if (buf.length > 6 * 1024 * 1024) return fail('Image trop lourde (max 6 Mo)');
+        const path = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
+        const up = await sb().storage.from('milicia-photos').upload(path, buf, { contentType: mime, upsert: false });
+        if (up.error) return fail(up.error.message);
+        const { data } = sb().storage.from('milicia-photos').getPublicUrl(path);
+        return res.status(200).json({ url: data.publicUrl });
+      }
+
       // ── Journal d'audit (consultation réservée Commandement / Direction) ──
       case 'audit_log': {
         if (!me) return fail('Non authentifié', 401);
