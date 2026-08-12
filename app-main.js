@@ -42,7 +42,6 @@ function renderSanctions() {
         <input type="text" id="sancSearch" placeholder="Rechercher dans la rubrique" autocomplete="off">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
-      ${typeof exportBtns === 'function' ? exportBtns('sanctions') : ''}
       ${canManage ? `<button class="btn btn-primary" id="sancNew">
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         NOUVELLE SANCTION
@@ -512,23 +511,34 @@ async function patrouilleDelete(id) {
 
 // ── Debrief soldat : cocher / décocher une certification ──
 async function certifToggle(mat, formation, has) {
-  if (ME.demo) {
-    PAGES.formation.certifs[mat] = PAGES.formation.certifs[mat] || [];
-    const arr = PAGES.formation.certifs[mat];
-    if (has) { if (!arr.includes(formation)) arr.push(formation); }
-    else { const i = arr.indexOf(formation); if (i >= 0) arr.splice(i, 1); }
-  } else {
-    try { await api('certif_set', { matricule: mat, formation, has }); }
-    catch (e) { notify(e.message); return; }
-    try { const fm = await api('formations'); if (fm.certifs) PAGES.formation.certifs = fm.certifs; } catch (e) {}
-  }
-  // Re-render la matrice si on est sur Debrief
-  if (currentPage === 'debrief') {
+  // Applique le changement en local (optimiste) pour un affichage instantané
+  const setLocal = (val) => {
+    const certifs = PAGES.formation.certifs;
+    certifs[mat] = certifs[mat] || [];
+    const arr = certifs[mat];
+    const i = arr.indexOf(formation);
+    if (val) { if (i < 0) arr.push(formation); }
+    else if (i >= 0) arr.splice(i, 1);
+  };
+  const rerender = () => {
+    if (currentPage !== 'debrief') return;
     const cfg = PAGES.debrief;
     const host = document.getElementById('customSection');
-    host.innerHTML = cfg.render(cfg);
-    cfg.afterRender(cfg);
+    if (host) { host.innerHTML = cfg.render(cfg); cfg.afterRender(cfg); }
     refreshStats('debrief');
+  };
+
+  setLocal(has);
+  rerender();               // affichage immédiat, sans attendre le serveur
+  if (ME.demo) return;
+
+  // Persistance serveur en arrière-plan ; on annule visuellement si erreur
+  try {
+    await api('certif_set', { matricule: mat, formation, has });
+  } catch (e) {
+    setLocal(!has);
+    rerender();
+    notify(e.message);
   }
 }
 
